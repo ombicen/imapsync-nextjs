@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { ImapConnectionConfig } from "@/lib/types/imap";
 import { ImapFlow } from "imapflow";
 
+interface ImapFlowError {
+  response?: {
+    responseText?: string;
+  };
+  message?: string;
+}
+
 export async function POST(request: Request) {
   try {
     const { config } = await request.json();
@@ -48,8 +55,6 @@ export async function POST(request: Request) {
       // Connect and test
       const responsy = await client.connect();
      
-      
-      
       // Test by listing mailboxes
       try {
         // Get the list of mailboxes with tree structure
@@ -81,8 +86,14 @@ export async function POST(request: Request) {
           error: error instanceof Error ? error.message : 'Failed to list mailboxes'
         });
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+    } catch (error: any) {
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : error?.response?.responseText 
+        ? error.response.responseText 
+        : error?.message 
+        ? error.message 
+        : 'Connection failed';
       console.error('IMAP connection error:', error);
       return NextResponse.json(
         { type: 'error', message: errorMessage },
@@ -93,12 +104,15 @@ export async function POST(request: Request) {
       try {
         await client.logout();
       } catch (logoutError) {
-        // If logout fails, just close the connection
         client.close();
       }
     }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unexpected error occurred';
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : typeof error === 'string' 
+      ? error 
+      : 'Internal server error';
     return NextResponse.json(
       { type: 'error', message: errorMessage },
       { status: 500 }
