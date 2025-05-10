@@ -44,9 +44,7 @@ npm install
 yarn install
 ```
 
-
-
-5. Start the development server
+3. Start the development server
 ```bash
 npm run dev
 # or
@@ -54,24 +52,6 @@ yarn dev
 ```
 
 The application will be available at `http://localhost:3000`
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file with the following variables:
-
-```env
-# Authentication
-NEXTAUTH_SECRET="your-secret-key"
-NEXTAUTH_URL="http://localhost:3000"
-
-# Email Provider (for password reset)
-SMTP_HOST="smtp.example.com"
-SMTP_PORT=587
-SMTP_USER="your-email@example.com"
-SMTP_PASSWORD="your-password"
-```
 
 ### IMAP Configuration
 
@@ -86,14 +66,13 @@ The application supports both TLS/SSL and STARTTLS connections. Configure your I
 
 ## Usage
 
-1. Log in to the dashboard
-2. Configure source and destination IMAP servers
-3. Set sync options:
+1. Configure source and destination IMAP servers
+2. Set sync options:
    - Batch size: Number of emails to process at once
    - Max retries: Number of retry attempts for failed operations
    - Retry delay: Time to wait between retries
-4. Start the sync process
-5. Monitor the sync status and logs in real-time
+3. Start the sync process
+4. Monitor the sync status and logs in real-time
 
 ## Security
 
