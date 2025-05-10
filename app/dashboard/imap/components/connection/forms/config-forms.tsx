@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ImapConnectionConfig } from "@/lib/types/imap";
+import { ImapConnectionConfig } from "@/app/dashboard/imap/types/imap";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -15,13 +15,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
@@ -33,7 +27,6 @@ const formSchema = z.object({
   password: z.string().min(1, "Password is required"),
   secure: z.boolean().default(true),
   tls: z.boolean().default(false),
-  mailbox: z.string().default("INBOX"),
 });
 
 interface ImapConfigFormsProps {
@@ -54,7 +47,6 @@ export function ImapConfigForms({ type, onSubmit, disabled = false }: ImapConfig
       password: "",
       secure: true,
       tls: false,
-      mailbox: "INBOX",
     },
   });
   
@@ -135,38 +127,6 @@ export function ImapConfigForms({ type, onSubmit, disabled = false }: ImapConfig
                 <FormControl>
                   <Input type="password" {...field} disabled={disabled} />
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="mailbox"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Mailbox</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                  disabled={disabled}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select mailbox" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="INBOX">INBOX</SelectItem>
-                    <SelectItem value="Sent">Sent</SelectItem>
-                    <SelectItem value="Drafts">Drafts</SelectItem>
-                    <SelectItem value="Archive">Archive</SelectItem>
-                    <SelectItem value="Junk">Junk</SelectItem>
-                    <SelectItem value="Trash">Trash</SelectItem>
-                  </SelectContent>
-                </Select>
                 <FormMessage />
               </FormItem>
             )}

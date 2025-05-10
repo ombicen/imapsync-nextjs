@@ -1,12 +1,12 @@
 "use client";
 
-import { SyncResults } from "@/lib/types/imap";
+import type { ImapSyncResults } from "@/lib/types/imap";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle, AlertCircle, ClockIcon, Database, Mail } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface ImapSyncResultsProps {
-  results: SyncResults;
+  results: ImapSyncResults;
 }
 
 export function ImapSyncResults({ results }: ImapSyncResultsProps) {
@@ -17,7 +17,7 @@ export function ImapSyncResults({ results }: ImapSyncResultsProps) {
       transition={{ duration: 0.3 }}
       className="space-y-4"
     >
-      {results.dryRun && (
+      {results.message && (
         <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/30 p-3 border border-yellow-200 dark:border-yellow-900">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -48,7 +48,7 @@ export function ImapSyncResults({ results }: ImapSyncResultsProps) {
             <p className="text-sm text-muted-foreground">Total Messages</p>
             <p className="text-lg font-medium flex items-center">
               <Mail className="h-4 w-4 mr-1 text-blue-500" />
-              {results.totalMessages.toLocaleString()}
+              {results.stats.total.toLocaleString()}
             </p>
           </div>
           
@@ -56,7 +56,7 @@ export function ImapSyncResults({ results }: ImapSyncResultsProps) {
             <p className="text-sm text-muted-foreground">Total Size</p>
             <p className="text-lg font-medium flex items-center">
               <Database className="h-4 w-4 mr-1 text-purple-500" />
-              {results.totalSize}
+              {results.stats.total.toLocaleString()}
             </p>
           </div>
           
@@ -64,28 +64,28 @@ export function ImapSyncResults({ results }: ImapSyncResultsProps) {
             <p className="text-sm text-muted-foreground">Time Taken</p>
             <p className="text-lg font-medium flex items-center">
               <ClockIcon className="h-4 w-4 mr-1 text-amber-500" />
-              {results.timeTaken}
+              {new Date(results.endTime).toLocaleTimeString()}
             </p>
           </div>
           
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">Messages Copied</p>
             <p className="text-lg font-medium">
-              {results.dryRun ? (
-                <span className="text-yellow-500">{results.messageCopied} (simulated)</span>
+              {results.message ? (
+                <span className="text-yellow-500">{results.message} (simulated)</span>
               ) : (
-                results.messageCopied.toLocaleString()
+                results.stats.copied.toLocaleString()
               )}
             </p>
           </div>
         </div>
         
-        {results.messagesFailed > 0 && (
+        {results.stats.errors.length > 0 && (
           <>
             <Separator className="my-3" />
             <div className="text-sm text-destructive flex items-center">
               <AlertCircle className="h-4 w-4 mr-1" />
-              {results.messagesFailed} messages failed to copy
+              {results.stats.errors.length} errors occurred
             </div>
           </>
         )}

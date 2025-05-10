@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ImapSyncOptions as SyncOptionsType } from "@/lib/types/imap";
+import type { ImapSyncOptions } from "@/lib/types/imap";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -18,15 +18,17 @@ import { Slider } from "@/components/ui/slider";
 import { useEffect } from "react";
 
 const formSchema = z.object({
-  dryRun: z.boolean().default(true),
-  calculateStats: z.boolean().default(true),
-  skipExistingMessages: z.boolean().default(true),
   batchSize: z.number().min(10).max(500).default(100),
+  maxRetries: z.number().min(1).max(10).default(3),
+  retryDelay: z.number().min(1000).max(30000).default(5000),
+  dryRun: z.boolean().default(false),
+  skipExistingMessages: z.boolean().default(false),
+  calculateStats: z.boolean().default(true),
 });
 
 interface ImapSyncOptionsProps {
-  options: SyncOptionsType;
-  onChange: (options: SyncOptionsType) => void;
+  options: ImapSyncOptions;
+  onChange: (options: ImapSyncOptions) => void;
   disabled?: boolean;
 }
 
@@ -38,7 +40,10 @@ export function ImapSyncOptions({ options, onChange, disabled = false }: ImapSyn
   
   // Update form when external options change
   useEffect(() => {
-    form.reset(options);
+    // Only reset if the options have actually changed
+    if (JSON.stringify(form.getValues()) !== JSON.stringify(options)) {
+      form.reset(options);
+    }
   }, [form, options]);
   
   // Watch for form changes and propagate them
@@ -48,7 +53,7 @@ export function ImapSyncOptions({ options, onChange, disabled = false }: ImapSyn
           && value.calculateStats !== undefined 
           && value.skipExistingMessages !== undefined
           && value.batchSize !== undefined) {
-        onChange(value as SyncOptionsType);
+        onChange(value as ImapSyncOptions);
       }
     });
     
@@ -142,6 +147,52 @@ export function ImapSyncOptions({ options, onChange, disabled = false }: ImapSyn
               </FormControl>
               <FormDescription>
                 Number of messages to process in each batch
+              </FormDescription>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="maxRetries"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Max Retries: {field.value}</FormLabel>
+              <FormControl>
+                <Slider
+                  value={[field.value]}
+                  min={1}
+                  max={10}
+                  step={1}
+                  onValueChange={(value) => field.onChange(value[0])}
+                  disabled={disabled}
+                />
+              </FormControl>
+              <FormDescription>
+                Maximum number of retries for failed operations
+              </FormDescription>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="retryDelay"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Retry Delay: {field.value / 1000}s</FormLabel>
+              <FormControl>
+                <Slider
+                  value={[field.value]}
+                  min={1000}
+                  max={30000}
+                  step={1000}
+                  onValueChange={(value) => field.onChange(value[0])}
+                  disabled={disabled}
+                />
+              </FormControl>
+              <FormDescription>
+                Delay between retry attempts (in milliseconds)
               </FormDescription>
             </FormItem>
           )}

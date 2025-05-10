@@ -1,11 +1,11 @@
 "use client";
 
 import { Progress } from "@/components/ui/progress";
-import { SyncProgress } from "@/lib/types/imap";
+import type { ImapSyncProgress } from "@/lib/types/imap";
 import { motion } from "framer-motion";
 
 interface ImapSyncProgressProps {
-  progress: SyncProgress;
+  progress: ImapSyncProgress;
 }
 
 export function ImapSyncProgress({ progress }: ImapSyncProgressProps) {
