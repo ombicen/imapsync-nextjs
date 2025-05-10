@@ -25,9 +25,30 @@ declare module 'imapflow' {
     });
 
     connect(): Promise<void>;
-    listMailboxes(): Promise<any[]>;
+    listMailboxes(detailed?: boolean): Promise<{
+      name: string;
+      path: string;
+      children?: {
+        name: string;
+        path: string;
+      }[];
+    }[]>;
     logout(): Promise<void>;
     close(): void;
     select(mailbox: string): Promise<void>;
+    getMailboxInfo(): Promise<{
+      messages: number;
+      unseen: number;
+      recent: number;
+    }>;
+    search(query: string[]): Promise<number[]>;
+    fetch(uid: number, options: {
+      bodies: string[];
+      struct: boolean;
+    }): Promise<any>;
+    append(data: any, options: {
+      mailbox: string;
+      flags: string[];
+    }): Promise<void>;
   }
 }

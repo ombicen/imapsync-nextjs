@@ -1,6 +1,20 @@
-importScripts('https://cdn.jsdelivr.net/npm/imapflow@2.1.0/dist/imap-flow.js');
+import { ImapFlow } from 'imapflow';
+import { ImapConnectionConfig } from '@/lib/types/imap';
 
-self.onmessage = async function (event) {
+interface WorkerMessage {
+  sourceConfig: ImapConnectionConfig;
+  destinationConfig: ImapConnectionConfig;
+  syncOptions: {
+    batchSize: number;
+    maxRetries: number;
+    retryDelay: number;
+    dryRun: boolean;
+    skipExistingMessages: boolean;
+    calculateStats: boolean;
+  };
+}
+
+self.onmessage = async function (event: MessageEvent<WorkerMessage>) {
   try {
     const { sourceConfig, destinationConfig, syncOptions } = event.data;
     
@@ -14,7 +28,10 @@ self.onmessage = async function (event) {
       host: sourceConfig.host,
       port: sourceConfig.port,
       secure: sourceConfig.secure,
-      tls: sourceConfig.tls,
+      tls: sourceConfig.tls ? {
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2'
+      } : undefined,
       auth: {
         user: sourceConfig.username,
         pass: sourceConfig.password,
@@ -26,7 +43,10 @@ self.onmessage = async function (event) {
       host: destinationConfig.host,
       port: destinationConfig.port,
       secure: destinationConfig.secure,
-      tls: destinationConfig.tls,
+      tls: destinationConfig.tls ? {
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2'
+      } : undefined,
       auth: {
         user: destinationConfig.username,
         pass: destinationConfig.password,
@@ -36,95 +56,71 @@ self.onmessage = async function (event) {
     try {
       // Connect to both servers
       await sourceClient.connect();
-      await sourceClient.login();
       await destinationClient.connect();
-      await destinationClient.login();
 
-      // Get mailbox list from source
-      const mailboxes = await sourceClient.listMailboxes();
-      const totalMailboxes = mailboxes.length;
-      let currentMailbox = 0;
+      // Select source mailbox
+      await sourceClient.select('INBOX');
+      
+      // Create destination mailbox if it doesn't exist
+      try {
+        await destinationClient.select('INBOX');
+      } catch {
+        throw new Error('Failed to select destination mailbox');
+      }
 
-      // Initialize stats
-      const stats = {
-        totalEmails: 0,
-        syncedEmails: 0,
-        skippedEmails: 0,
-        errors: [] as string[],
-      };
+      // Get message count
+      const sourceInfo = await sourceClient.getMailboxInfo();
+      const totalMessages = sourceInfo.messages;
+      
+      if (!totalMessages) {
+        self.postMessage({ type: 'progress', data: { total: 0, current: 0, percentage: 100 } });
+        self.postMessage({ type: 'complete', data: { total: 0, copied: 0, skipped: 0, errors: [] } });
+        return;
+      }
 
-      // Send initial progress
-      self.postMessage({ 
-        type: 'progress', 
-        data: {
-          total: totalMailboxes,
-          current: currentMailbox,
-          percentage: 0,
-          estimatedTimeRemaining: null,
-          status: 'running',
-        }
-      });
+      // Process messages in batches
+      const batchSize = syncOptions.batchSize || 10;
+      for (let i = 0; i < totalMessages; i += batchSize) {
+        const batch = Array(batchSize).fill(null).map((_, j) => i + j + 1);
+        
+        // Fetch messages
+        const messages = await sourceClient.search(['UID', `${i + 1}:${i + batchSize}`]);
 
-      // Sync each mailbox
-      for (const mailbox of mailboxes) {
-        try {
-          currentMailbox++;
-          
-          // Select mailbox on source
-          await sourceClient.selectMailbox(mailbox.name);
-          
-          // Create mailbox on destination if it doesn't exist
+        // Copy messages to destination
+        for (const uid of messages) {
           try {
-            await destinationClient.createMailbox(mailbox.name);
-          } catch (e) {
-            // Mailbox might already exist
-          }
-          
-          // Select mailbox on destination
-          await destinationClient.selectMailbox(mailbox.name);
-          
-          // Get messages from source
-          const messages = await sourceClient.search(['ALL']);
-          stats.totalEmails += messages.length;
-          
-          // Sync messages in batches
-          for (let i = 0; i < messages.length; i += syncOptions.batchSize) {
-            const batch = messages.slice(i, i + syncOptions.batchSize);
-            
-            for (const message of batch) {
-              try {
-                // Fetch message from source
-                const messageData = await sourceClient.fetch(message, {
-                  headers: true,
-                  body: true,
-                });
-                
-                // Store message on destination
-                await destinationClient.appendMessage(mailbox.name, messageData);
-                stats.syncedEmails++;
-              } catch (error) {
-                stats.errors.push(`Failed to sync message ${message}: ${error.message}`);
-                stats.skippedEmails++;
-              }
-            }
-            
-            // Update progress
-            self.postMessage({ 
-              type: 'progress', 
-              data: {
-                total: totalMailboxes,
-                current: currentMailbox,
-                percentage: Math.round((currentMailbox / totalMailboxes) * 100),
-                estimatedTimeRemaining: null,
-                status: 'running',
-              }
+            const message = await sourceClient.fetch(uid, {
+              bodies: ['HEADER', 'TEXT'],
+              struct: true
             });
+            
+            await destinationClient.append(message.data, {
+              mailbox: 'INBOX',
+              flags: message.flags
+            });
+            
+            const progress = Math.round((i + batchSize) / totalMessages * 100);
+            self.postMessage({ type: 'progress', data: { total: totalMessages, current: i + batchSize, percentage: progress } });
+          } catch (error) {
+            console.error('Error copying message:', error);
+            self.postMessage({ type: 'error', data: { uid, error: error instanceof Error ? error.message : 'Unknown error' } });
           }
-        } catch (error) {
-          stats.errors.push(`Failed to sync mailbox ${mailbox.name}: ${error.message}`);
         }
       }
 
+      // Get final stats
+      const sourceStats = await sourceClient.getMailboxInfo();
+      const destinationStats = await destinationClient.getMailboxInfo();
+
+      // Calculate stats
+      const stats = {
+        total: totalMessages,
+        copied: destinationStats.messages,
+        skipped: sourceStats.messages - destinationStats.messages,
+        errors: []
+      };
+
+      self.postMessage({ type: 'complete', data: stats });
       // Send final stats
       self.postMessage({ 
         type: 'stats', 
@@ -141,14 +137,12 @@ self.onmessage = async function (event) {
       // Clean up connections
       try {
         await sourceClient.logout();
-        await sourceClient.destroy();
       } catch (error) {
         console.error('Error closing source connection:', error);
       }
 
       try {
         await destinationClient.logout();
-        await destinationClient.destroy();
       } catch (error) {
         console.error('Error closing destination connection:', error);
       }

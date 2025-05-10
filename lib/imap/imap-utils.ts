@@ -19,15 +19,36 @@ export async function connectToImap(config: ImapConnectionConfig): Promise<ImapF
   return client;
 }
 
-export async function getMailboxList(client: ImapFlow): Promise<string[]> {
-  const list = await client.list();
-  return list.map(mailbox => mailbox.path);
+interface MailboxInfo {
+  messages: number;
+  unseen: number;
+  recent: number;
 }
 
-export async function getMailboxTree(client: ImapFlow): Promise<{
-  folders: Array<{ path: string; attributes: string[] }>
-}> {
-  return await client.listTree();
+interface Mailbox {
+  name: string;
+  path: string;
+  children?: Mailbox[];
+}
+
+export async function getMailboxList(client: ImapFlow): Promise<string[]> {
+  const mailboxes = await client.listMailboxes();
+  return mailboxes.map(mailbox => mailbox.name);
+}
+
+export async function getMailboxTree(client: ImapFlow): Promise<Mailbox[]> {
+  const mailboxes = await client.listMailboxes(true);
+  return mailboxes;
+}
+
+export async function getMailboxInfo(client: ImapFlow, mailbox: string): Promise<MailboxInfo> {
+  await client.select(mailbox);
+  const info = await client.getMailboxInfo();
+  return {
+    messages: info.messages,
+    unseen: info.unseen,
+    recent: info.recent,
+  };
 }
 
 export async function syncMailbox(
@@ -40,8 +61,9 @@ export async function syncMailbox(
     skipExistingMessages: boolean;
   }
 ): Promise<{ total: number; copied: number; failed: number }> {
-  const sourceMailbox = await sourceClient.select(mailboxPath);
-  const totalMessages = sourceMailbox.exists;
+  await sourceClient.select(mailboxPath);
+  const sourceInfo = await sourceClient.getMailboxInfo();
+  const totalMessages = sourceInfo.messages;
   let copied = 0;
   let failed = 0;
 

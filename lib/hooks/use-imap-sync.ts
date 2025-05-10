@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { 
-  ImapSyncState, 
   ImapConnectionConfig, 
   ImapSyncOptions,
-  SyncProgress, 
-  SyncResults 
+  ImapSyncProgress,
+  ImapSyncResults,
+  ImapSyncStats,
+  ImapSyncState
 } from "@/lib/types/imap";
 import {
   connectToImap,
@@ -25,21 +26,10 @@ const getEstimatedTimeRemaining = (current: number, total: number): string | nul
   }
 };
 
-interface ImapSyncState {
-  syncState: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
-  progress: {
-    total: number;
-    current: number;
-    percentage: number;
-    estimatedTimeRemaining: string | null;
-    status: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
-  };
-  stats: {
-    totalEmails: number;
-    syncedEmails: number;
-    skippedEmails: number;
-    errors: string[];
-  };
+interface ImapSyncStatus {
+  syncState: 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'waiting' | 'connecting' | 'copying' | 'finalizing';
+  progress: ImapSyncProgress;
+  stats: ImapSyncStats;
 }
 
 export interface UseImapSyncProps {
@@ -51,9 +41,9 @@ export interface UseImapSyncProps {
   };
   onSyncComplete?: (results: {
     stats: {
-      totalEmails: number;
-      syncedEmails: number;
-      skippedEmails: number;
+      total: number;
+      copied: number;
+      skipped: number;
       errors: string[];
     };
     success: boolean;
@@ -61,21 +51,22 @@ export interface UseImapSyncProps {
   }) => void;
 }
 
-export function useImapSync({ syncOptions, onSyncComplete }: UseImapSyncProps) {
-  const [state, setState] = useState<ImapSyncState>({
+export default function useImapSync({ syncOptions, onSyncComplete }: UseImapSyncProps) {
+  const [status, setStatus] = useState<ImapSyncStatus | null>(null);
+  const [state, setState] = useState<ImapSyncStatus>({
     syncState: 'idle',
     progress: {
       total: 0,
       current: 0,
       percentage: 0,
       estimatedTimeRemaining: null,
-      status: "idle",
+      status: 'idle',
     },
     stats: {
-      totalEmails: 0,
-      syncedEmails: 0,
-      skippedEmails: 0,
-      errors: [],
+      total: 0,
+      copied: 0,
+      skipped: 0,
+      errors: []
     },
   });
 
@@ -114,25 +105,43 @@ export function useImapSync({ syncOptions, onSyncComplete }: UseImapSyncProps) {
         current: 0,
         percentage: 0,
         estimatedTimeRemaining: null,
-        status: "idle",
+        status: 'idle',
       },
       stats: {
-        totalEmails: 0,
-        syncedEmails: 0,
-        skippedEmails: 0,
+        total: 0,
+        copied: 0,
+        skipped: 0,
         errors: [],
       },
     });
   };
 
+  const handleProgressUpdate = (progress: ImapSyncProgress) => {
+    setState(prev => ({
+      ...prev,
+      progress: {
+        ...progress,
+        percentage: Math.round((progress.current / progress.total) * 100),
+        estimatedTimeRemaining: getEstimatedTimeRemaining(progress.current, progress.total),
+      },
+      stats: {
+        ...prev.stats,
+        total: progress.total,
+        copied: progress.current,
+        skipped: 0,
+        errors: []
+      },
+    }));
+  };
+
   return {
-    syncState: state.syncState,
+    status,
     progress: state.progress,
     stats: state.stats,
-    handleStartSync,
-    handlePauseSync,
-    handleResumeSync,
-    handleStopSync,
-    handleReset,
+    startSync: handleStartSync,
+    pauseSync: handlePauseSync,
+    resumeSync: handleResumeSync,
+    stopSync: handleStopSync,
+    resetSync: handleReset,
   };
 }

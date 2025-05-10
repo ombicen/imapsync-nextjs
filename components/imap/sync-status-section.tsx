@@ -3,14 +3,14 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlayIcon, PauseIcon, StopCircleIcon, RefreshCwIcon } from "lucide-react";
-import { ImapSyncState, ImapSyncProgress as ProgressType, ImapSyncStats as StatsType } from "@/lib/types/imap";
-import { ImapSyncProgress } from "./imap-sync-progress";
-import { ImapSyncResults } from "./imap-sync-results";
+import type { ImapSyncState, ImapSyncProgress, ImapSyncStats } from "@/lib/types/imap";
+import { ImapSyncProgress as ProgressComponent } from "./imap-sync-progress";
+import { ImapSyncResults as ResultsComponent } from "./imap-sync-results";
 
 interface SyncStatusSectionProps {
   syncState: ImapSyncState;
-  progress: ProgressType;
-  stats: StatsType | null;
+  progress: ImapSyncProgress;
+  stats: ImapSyncStats | null;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -54,7 +54,7 @@ export function SyncStatusSection({
 
         {syncState === "running" && (
           <div className="space-y-4">
-            <ImapSyncProgress progress={progress} />
+            <ProgressComponent progress={progress} />
             <div className="flex gap-2">
               <Button onClick={onPause} variant="outline" className="flex-1">
                 <PauseIcon className="mr-2 h-4 w-4" />
@@ -70,7 +70,7 @@ export function SyncStatusSection({
 
         {syncState === "paused" && (
           <div className="space-y-4">
-            <ImapSyncProgress progress={progress} />
+            <ProgressComponent progress={progress} />
             <div className="flex gap-2">
               <Button onClick={onResume} variant="outline" className="flex-1">
                 <PlayIcon className="mr-2 h-4 w-4" />
@@ -86,7 +86,19 @@ export function SyncStatusSection({
 
         {syncState === "completed" && stats && (
           <div className="space-y-4">
-            <ImapSyncResults results={stats} />
+            <ResultsComponent results={{
+              stats: {
+                total: stats.total,
+                copied: stats.copied,
+                skipped: stats.skipped,
+                errors: stats.errors
+              },
+              success: true,
+              startTime: new Date().toISOString(),
+              endTime: new Date().toISOString(),
+              sourceMailbox: 'INBOX',
+              destinationMailbox: 'INBOX'
+            }} />
             <Button onClick={onReset} className="w-full">
               <RefreshCwIcon className="mr-2 h-4 w-4" />
               Start New Sync
