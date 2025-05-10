@@ -104,43 +104,42 @@ export function ImapSyncContainer({
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <h3 className="text-lg font-semibold mb-4">Source Server</h3>
-          <ConnectionConfigSection
-            title="Source Server"
-            config={sourceConnectionConfig}
-            showForm={showSourceForm}
-            onToggleForm={() => setShowSourceForm(!showSourceForm)}
-            onSubmit={setSourceConnectionConfig}
-          />
+        <div className="space-y-8">
+          <div>
+              <ConnectionConfigSection
+              title="Source Server"
+              config={sourceConnectionConfig}
+              showForm={showSourceForm}
+              onToggleForm={() => setShowSourceForm(!showSourceForm)}
+              onSubmit={setSourceConnectionConfig}
+            />
+          </div>
+          <div>
+             <ConnectionConfigSection
+              title="Destination Server"
+              config={destinationConnectionConfig}
+              showForm={showDestinationForm}
+              onToggleForm={() => setShowDestinationForm(!showDestinationForm)}
+              onSubmit={setDestinationConnectionConfig}
+            />
+          </div>
         </div>
-        <div>
-          <h3 className="text-lg font-semibold mb-4">Destination Server</h3>
-          <ConnectionConfigSection
-            title="Destination Server"
-            config={destinationConnectionConfig}
-            showForm={showDestinationForm}
-            onToggleForm={() => setShowDestinationForm(!showDestinationForm)}
-            onSubmit={setDestinationConnectionConfig}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <SyncOptionsSection
-            syncOptions={syncOptions}
-            onOptionsChange={setSyncOptions}
-          />
-        </div>
-        <div>
-          <SyncStatusSection
-            isSyncing={isSyncing}
-            onSyncStart={handleStartSync}
-            onSyncStop={handleStopSync}
-            syncProgress={syncProgress}
-            syncStats={syncStats}
-          />
+        <div className="space-y-8">
+          <div>
+            <SyncOptionsSection
+              syncOptions={syncOptions}
+              onOptionsChange={setSyncOptions}
+            />
+          </div>
+          <div>
+            <SyncStatusSection
+              isSyncing={isSyncing}
+              onSyncStart={handleStartSync}
+              onSyncStop={handleStopSync}
+              syncProgress={syncProgress}
+              syncStats={syncStats}
+            />
+          </div>
         </div>
       </div>
     </div>

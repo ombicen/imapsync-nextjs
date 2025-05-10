@@ -41,20 +41,19 @@ export async function POST(request: Request) {
       connectionTimeout: 10000, // 10 seconds
       greetingTimeout: 5000,     // 5 seconds
       socketTimeout: 30000,      // 30 seconds
-      verifyOnly: true
+      verifyOnly: false
     });
 
     try {
       // Connect and test
-      await client.connect();
+      const responsy = await client.connect();
+     
+      
       
       // Test by listing mailboxes
       try {
-        // First select INBOX to ensure we're in a valid state
-        await client.select('INBOX');
-        
-        // Then try to list mailboxes
-        const mailboxes = await client.listMailboxes();
+        // Get the list of mailboxes with tree structure
+        const mailboxes = await client.list();
         
         // Clean up gracefully
         await client.logout();

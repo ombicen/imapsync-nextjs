@@ -5,9 +5,10 @@ import { Badge } from "@/components/ui/badge";
 
 interface ConnectionLogProps {
   logs: Array<{ type: 'info' | 'error' | 'success'; message: string }>;
+  mailboxes?: Array<{ name: string; path: string; children?: Array<{ name: string; path: string }> }>;
 }
 
-export function ConnectionLog({ logs }: ConnectionLogProps) {
+export function ConnectionLog({ logs, mailboxes }: ConnectionLogProps) {
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -17,12 +18,25 @@ export function ConnectionLog({ logs }: ConnectionLogProps) {
     }
   }, [logs]);
 
+  const renderFolderTree = (folders: Array<{ name: string; path: string; children?: Array<{ name: string; path: string }> }>, indent = 0) => {
+    return <div className="flex flex-col shadow-sm p-5 border border-black/10 rounded-sm bg-white border-radius-md"><div className='border-l border-dashed border-black/60'>{folders.map((folder, index) => (
+      <div key={index} style={{ marginLeft: `${indent * 16}px` }} className="text-xs pl-1">
+        <span className="font-medium">{folder.name}</span>
+        {folder.children && folder.children.length > 0 && (
+          <div className="ml-4">
+            {renderFolderTree(folder.children, indent + 1)}
+          </div>
+        )}
+      </div>
+    ))}</div></div>;
+  };
+
   return (
     <div className="mt-4">
       <div className="text-sm font-medium text-muted-foreground mb-2">Connection Log</div>
       <div 
         ref={logContainerRef}
-        className="h-32 overflow-y-auto rounded-md border p-3 bg-muted/20"
+        className="h-64 overflow-y-auto rounded-md border p-3 bg-muted/20"
       >
         {logs.map((log, index) => (
           <div key={index} className="mb-2">
@@ -34,6 +48,12 @@ export function ConnectionLog({ logs }: ConnectionLogProps) {
             </Badge>
           </div>
         ))}
+        {mailboxes && mailboxes.length > 0 && (
+          <div className="mt-4">
+            <div className="text-sm font-medium text-muted-foreground mb-2">Folder Structure</div>
+            {renderFolderTree(mailboxes)}
+          </div>
+        )}
       </div>
     </div>
   );

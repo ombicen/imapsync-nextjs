@@ -33,20 +33,21 @@ interface ImapConfigFormsProps {
   type: "source" | "destination";
   onSubmit: (config: ImapConnectionConfig) => void;
   disabled?: boolean;
+  initialValues?: ImapConnectionConfig;
 }
 
-export function ImapConfigForms({ type, onSubmit, disabled = false }: ImapConfigFormsProps) {
+export function ImapConfigForms({ type, onSubmit, disabled = false, initialValues }: ImapConfigFormsProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      host: "",
-      port: 993,
-      username: "",
-      password: "",
-      secure: true,
-      tls: false,
+      host: initialValues?.host || "",
+      port: initialValues?.port || 993,
+      username: initialValues?.username || "",
+      password: initialValues?.password || "",
+      secure: initialValues?.secure ?? true,
+      tls: initialValues?.tls ?? false,
     },
   });
   

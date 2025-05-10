@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, Mail } from "lucide-react";
 import { ImapConfigForms } from "./forms/config-forms";
 import { ImapConnectionStatus } from "./status/connection-status";
 import { ConnectionLog } from "./log/connection-log";
@@ -35,6 +35,15 @@ export function ConnectionConfigSection({
 }: ConnectionConfigSectionProps) {
   const [connectionTestState, setConnectionTestState] = useState<'idle' | 'testing' | 'connected' | 'failed'>('idle');
   const [logs, setLogs] = useState<Array<{ type: 'info' | 'error' | 'success'; message: string }>>([]);
+  const [mailboxes, setMailboxes] = useState<Array<{ name: string; path: string; children?: Array<{ name: string; path: string }> }>>([]);
+  const [formValues, setFormValues] = useState<ImapConnectionConfig>({
+    host: config?.host || '',
+    port: config?.port || 993,
+    username: config?.username || '',
+    password: config?.password || '',
+    secure: config?.secure ?? true,
+    tls: config?.tls ?? false,
+  });
 
   const addLog = (type: 'info' | 'error' | 'success', message: string) => {
     setLogs(prev => [
@@ -63,6 +72,9 @@ export function ConnectionConfigSection({
       if (result.type === 'success') {
         setConnectionTestState('connected');
         addLog('success', 'Successfully connected to IMAP server');
+        if (result.mailboxes) {
+          setMailboxes(result.mailboxes);
+        }
       } else {
         throw new Error(result.message);
       }
@@ -75,25 +87,31 @@ export function ConnectionConfigSection({
   };
   return (
     <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold">{title}</h2>
+       <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>{title}</CardTitle>
+        <div className="flex items-center gap-2">
             {config && config.host && (
               <Badge variant="outline" className="ml-2">
                 {config.host}
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleTestConnection}
-              disabled={disabled || !config}
-            >
-              Test Connection
-            </Button>
+          <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTestConnection}
+            disabled={disabled || !config}
+          >
+            {connectionTestState === 'testing' ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900" />
+              </div>
+            ) : (
+              <Mail className="h-4 w-4 mr-2" />
+            )}
+            Test Connection
+          </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -107,12 +125,18 @@ export function ConnectionConfigSection({
               )}
             </Button>
           </div>
-        </div>
+      </CardHeader>
+      <CardContent className="pt-6">
+
 
         {showForm && (
           <ImapConfigForms
             type={title.toLowerCase() as "source" | "destination"}
-            onSubmit={onSubmit}
+            initialValues={formValues}
+            onSubmit={(values) => {
+              setFormValues(values);
+              onSubmit(values);
+            }}
             disabled={disabled}
           />
         )}
@@ -121,8 +145,8 @@ export function ConnectionConfigSection({
           <ImapConnectionStatus 
             config={config} 
             connectionTestState={connectionTestState}
-            onTestConnection={handleTestConnection}
             logs={logs}
+            mailboxes={mailboxes}
             onLog={addLog}
           />
         )}

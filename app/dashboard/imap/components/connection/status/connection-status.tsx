@@ -3,20 +3,22 @@
 import { ImapConnectionConfig } from "@/app/dashboard/imap/types/imap";
 import { CheckCircle, ShieldCheck, Mail } from "lucide-react";
 import { ConnectionLog } from "../log/connection-log";
+import { Button } from "@/components/ui/button";
 
 interface ImapConnectionStatusProps {
   config: ImapConnectionConfig | null;
   connectionTestState?: 'idle' | 'testing' | 'connected' | 'failed';
   onTestConnection?: () => Promise<void>;
   logs: Array<{ type: 'info' | 'error' | 'success'; message: string }>;
+  mailboxes?: Array<{ name: string; path: string; children?: Array<{ name: string; path: string }> }>;
   onLog: (type: 'info' | 'error' | 'success', message: string) => void;
 }
 
 export function ImapConnectionStatus({ 
   config, 
   connectionTestState = 'idle',
-  onTestConnection,
   logs,
+  mailboxes,
   onLog
 }: ImapConnectionStatusProps) {
   return (
@@ -48,17 +50,10 @@ export function ImapConnectionStatus({
                 <span className="text-xs">Testing...</span>
               </div>
             )}
-            {connectionTestState === 'testing' && (
-              <div className="ml-4 text-xs text-muted-foreground">
-                <span className="animate-pulse">Attempting to connect...</span>
-              </div>
-            )}
             {connectionTestState === 'failed' && (
               <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4 text-red-500 mr-1">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span className="text-xs">Connection Failed</span>
+                <ShieldCheck className="h-4 w-4 text-red-500 mr-1" />
+                <span className="text-xs text-red-500">Failed</span>
               </div>
             )}
             
@@ -75,8 +70,9 @@ export function ImapConnectionStatus({
             </div>
           </div>
         </div>
+      
       </div>
-      <ConnectionLog logs={logs} />
+      <ConnectionLog logs={logs} mailboxes={mailboxes} />
     </div>
   );
 }
