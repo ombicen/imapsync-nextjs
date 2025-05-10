@@ -18,19 +18,17 @@ A modern web application for managing and synchronizing IMAP email accounts buil
 - **UI Components**: shadcn/ui
 - **IMAP Library**: ImapFlow
 - **Authentication**: NextAuth.js
-- **Database**: Prisma
 
 ## Prerequisites
 
 - Node.js 18+
 - npm or yarn
-- PostgreSQL (for database)
 
 ## Installation
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/imapsync-nextjs.git
+git clone https://github.com/ombicen/imapsync-nextjs.git
 cd imapsync-nextjs
 ```
 
@@ -46,10 +44,7 @@ yarn install
 cp .env.example .env
 ```
 
-4. Run database migrations
-```bash
-npx prisma migrate dev
-```
+
 
 5. Start the development server
 ```bash
@@ -67,9 +62,6 @@ The application will be available at `http://localhost:3000`
 Create a `.env` file with the following variables:
 
 ```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/imapsync"
-
 # Authentication
 NEXTAUTH_SECRET="your-secret-key"
 NEXTAUTH_URL="http://localhost:3000"
