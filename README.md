@@ -1,11 +1,12 @@
 # IMAP Sync Dashboard
 
-A modern web application for managing and synchronizing IMAP email accounts built with Next.js 15 and TypeScript.
+A modern web application for synchronizing IMAP mailboxes between different email accounts. Built with Next.js 15 and TypeScript.
+
+This project was created using [bolt.new](https://bolt.new) as a starting template.
 
 ## Features
 
-- 📧 Manage multiple IMAP email accounts
-- 🔄 Synchronize emails between accounts
+- 🔄 Synchronize emails between IMAP mailboxes
 - 🔄 Configure sync options (batch size, retries, etc.)
 - 📊 Monitor sync status and logs
 - 🔒 Secure connection testing
