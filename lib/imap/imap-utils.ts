@@ -32,7 +32,11 @@ interface Mailbox {
 }
 
 export async function getMailboxList(client: ImapFlow): Promise<string[]> {
-  const mailboxes = await client.listMailboxes();
+  const mailboxes = await client.list('', {
+    subscribed: false,
+    status: true,
+    tree: true
+  });
   return mailboxes.map(mailbox => mailbox.name);
 }
 
@@ -43,11 +47,15 @@ export async function getMailboxTree(client: ImapFlow): Promise<Mailbox[]> {
 
 export async function getMailboxInfo(client: ImapFlow, mailbox: string): Promise<MailboxInfo> {
   await client.select(mailbox);
-  const info = await client.getMailboxInfo();
+  const [mailboxInfo] = await client.fetch('1', {
+    messages: true,
+    unseen: true,
+    recent: true
+  });
   return {
-    messages: info.messages,
-    unseen: info.unseen,
-    recent: info.recent,
+    messages: mailboxInfo.messages,
+    unseen: mailboxInfo.unseen,
+    recent: mailboxInfo.recent
   };
 }
 
@@ -62,7 +70,17 @@ export async function syncMailbox(
   }
 ): Promise<{ total: number; copied: number; failed: number }> {
   await sourceClient.select(mailboxPath);
-  const sourceInfo = await sourceClient.getMailboxInfo();
+  const [sourceInfo] = await sourceClient.fetch('1', {
+    messages: true,
+    unseen: true,
+    recent: true
+  });
+  await destinationClient.select(mailboxPath);
+  const [destinationInfo] = await destinationClient.fetch('1', {
+    messages: true,
+    unseen: true,
+    recent: true
+  });
   const totalMessages = sourceInfo.messages;
   let copied = 0;
   let failed = 0;

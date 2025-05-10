@@ -69,8 +69,10 @@ self.onmessage = async function (event: MessageEvent<WorkerMessage>) {
       }
 
       // Get message count
-      const sourceInfo = await sourceClient.getMailboxInfo();
-      const totalMessages = sourceInfo.messages;
+      const [messages] = await sourceClient.fetch('1:*', {
+        messages: true
+      });
+      const totalMessages = messages.messages;
       
       if (!totalMessages) {
         self.postMessage({ type: 'progress', data: { total: 0, current: 0, percentage: 100 } });
@@ -80,37 +82,48 @@ self.onmessage = async function (event: MessageEvent<WorkerMessage>) {
 
       // Process messages in batches
       const batchSize = syncOptions.batchSize || 10;
+      let failed = 0;
       for (let i = 0; i < totalMessages; i += batchSize) {
         const batch = Array(batchSize).fill(null).map((_, j) => i + j + 1);
         
         // Fetch messages
-        const messages = await sourceClient.search(['UID', `${i + 1}:${i + batchSize}`]);
+        const [messageUids] = await sourceClient.fetch(`${i + 1}:${i + batchSize}`, {
+          uid: true
+        });
 
         // Copy messages to destination
-        for (const uid of messages) {
+        for (const uid of messageUids) {
           try {
-            const message = await sourceClient.fetch(uid, {
+            const [message] = await sourceClient.fetch(uid, {
               bodies: ['HEADER', 'TEXT'],
-              struct: true
+              flags: true
             });
             
-            await destinationClient.append(message.data, {
-              mailbox: 'INBOX',
-              flags: message.flags
-            });
+            const data = message.content;
+            const flags = message.flags;
+
+            await destinationClient.append('INBOX', data, flags);
             
-            const progress = Math.round((i + batchSize) / totalMessages * 100);
-            self.postMessage({ type: 'progress', data: { total: totalMessages, current: i + batchSize, percentage: progress } });
+            self.postMessage({ type: 'progress', data: { total: totalMessages, current: i + 1, percentage: Math.round((i + 1) / totalMessages * 100) } });
           } catch (error) {
             console.error('Error copying message:', error);
+            failed++;
             self.postMessage({ type: 'error', data: { uid, error: error instanceof Error ? error.message : 'Unknown error' } });
           }
         }
       }
 
       // Get final stats
-      const sourceStats = await sourceClient.getMailboxInfo();
-      const destinationStats = await destinationClient.getMailboxInfo();
+      const [sourceStats] = await sourceClient.fetch('1', {
+        messages: true,
+        unseen: true,
+        recent: true
+      });
+      const [destinationStats] = await destinationClient.fetch('1', {
+        messages: true,
+        unseen: true,
+        recent: true
+      });
 
       // Calculate stats
       const stats = {
