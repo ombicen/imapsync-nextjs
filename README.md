@@ -1,4 +1,4 @@
-# IMAP Sync Dashboard
+# IMAP Sync
 
 A modern web application for synchronizing IMAP mailboxes between different email accounts. Built with Next.js 15 and TypeScript.
 
@@ -11,6 +11,10 @@ This project was created using [bolt.new](https://bolt.new) as a starting templa
 - 📊 Monitor sync status and logs
 - 🔒 Secure connection testing
 - 📱 Responsive design
+
+## Security
+
+The application runs entirely on the client side, connecting directly to your IMAP servers. No data is stored on any server.
 
 ## Tech Stack
 
@@ -38,11 +42,6 @@ cd imapsync-nextjs
 npm install
 # or
 yarn install
-```
-
-3. Copy and modify environment variables
-```bash
-cp .env.example .env
 ```
 
 
