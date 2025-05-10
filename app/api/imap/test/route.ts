@@ -53,7 +53,10 @@ export async function POST(request: Request) {
       // Test by listing mailboxes
       try {
         // Get the list of mailboxes with tree structure
-        const mailboxes = await client.list();
+        const mailboxes = await client.list('', {
+          subscribed: false,
+          status: true
+        });
         
         // Clean up gracefully
         await client.logout();
