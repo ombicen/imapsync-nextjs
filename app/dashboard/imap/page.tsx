@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import ImapDashboard from './components/imap-dashboard';
 
 export const metadata: Metadata = {
   title: 'IMAP Sync - Dashboard',
@@ -6,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function ImapPage() {
-  return null; // Layout component handles rendering
+  return <ImapDashboard />;
 }
