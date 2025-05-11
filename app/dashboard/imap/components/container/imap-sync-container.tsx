@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ImapConnectionConfig, NullableImapConnectionConfig, ImapSyncOptions, ImapSyncProgress, ImapSyncStats, ImapSyncResults, ImapSyncState } from '@/app/dashboard/imap/types/imap';
 import { ConnectionConfigSection } from '../connection/connection-config-section';
 import { SyncOptionsSection } from '../config/sync-options-section';
@@ -40,7 +40,6 @@ export function ImapSyncContainer({
     processedMessages: number;
     errors: number;
   } | null>(null);
-  const [syncWorker, setSyncWorker] = useState<Worker | null>(null);
   const [syncLogs, setSyncLogs] = useState<{message: string; timestamp: string}[]>([]);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncComplete, setSyncComplete] = useState(false);
@@ -55,42 +54,6 @@ export function ImapSyncContainer({
     endTime: string;
     elapsedTimeSeconds: number;
   } | null>(null);
-
-  useEffect(() => {
-    if (syncWorker) {
-      syncWorker.onmessage = (event) => {
-        const { type, data } = event.data;
-        switch (type) {
-          case 'progress':
-            setSyncProgress(data.percentage);
-            break;
-          case 'stats':
-            setSyncStats({
-              totalMessages: data.total,
-              processedMessages: data.processed,
-              errors: data.errors,
-            });
-            break;
-          case 'log':
-            console.log('Worker log:', data.message, data.data);
-            setSyncLogs(prev => [...prev, {message: data.message, timestamp: data.timestamp}]);
-            break;
-          case 'complete':
-            setIsSyncing(false);
-            syncWorker.terminate();
-            setSyncWorker(null);
-            break;
-          case 'error':
-            console.error('IMAP sync error:', data);
-            setSyncError(typeof data === 'string' ? data : JSON.stringify(data));
-            setIsSyncing(false);
-            syncWorker.terminate();
-            setSyncWorker(null);
-            break;
-        }
-      };
-    }
-  }, [syncWorker]);
 
   const handleStartSync = async () => {
     if (!initialSourceConfig || !initialDestinationConfig) return;
@@ -112,8 +75,8 @@ export function ImapSyncContainer({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sourceConfig: sourceConnectionConfig,
-          destinationConfig: destinationConnectionConfig,
+          sourceConfig: initialSourceConfig,
+          destinationConfig: initialDestinationConfig,
           syncOptions,
         }),
       });
@@ -169,8 +132,8 @@ export function ImapSyncContainer({
   };
 
   const handleStopSync = () => {
-    // Since we're using an API endpoint now, we can't actually stop the sync process
-    // once it's started. We can only update the UI to reflect that we're no longer syncing.
+    // We can't actually stop the sync process on the server side once it's started.
+    // We can only update the UI to reflect that we're no longer syncing.
     setIsSyncing(false);
     setSyncLogs(prev => [...prev, {message: 'Sync process cancelled by user', timestamp: new Date().toISOString()}]);
   };
