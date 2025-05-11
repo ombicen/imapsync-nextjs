@@ -41,6 +41,20 @@ export function ImapSyncContainer({
     errors: number;
   } | null>(null);
   const [syncWorker, setSyncWorker] = useState<Worker | null>(null);
+  const [syncLogs, setSyncLogs] = useState<{message: string; timestamp: string}[]>([]);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncComplete, setSyncComplete] = useState(false);
+  const [syncSummary, setSyncSummary] = useState<{
+    mailboxes: Array<{
+      name: string;
+      totalMessages: number;
+      syncedMessages: number;
+      skippedMessages: number;
+    }>;
+    startTime: string;
+    endTime: string;
+    elapsedTimeSeconds: number;
+  } | null>(null);
 
   useEffect(() => {
     if (syncWorker) {
@@ -57,6 +71,10 @@ export function ImapSyncContainer({
               errors: data.errors,
             });
             break;
+          case 'log':
+            console.log('Worker log:', data.message, data.data);
+            setSyncLogs(prev => [...prev, {message: data.message, timestamp: data.timestamp}]);
+            break;
           case 'complete':
             setIsSyncing(false);
             syncWorker.terminate();
@@ -64,6 +82,7 @@ export function ImapSyncContainer({
             break;
           case 'error':
             console.error('IMAP sync error:', data);
+            setSyncError(typeof data === 'string' ? data : JSON.stringify(data));
             setIsSyncing(false);
             syncWorker.terminate();
             setSyncWorker(null);
@@ -77,28 +96,92 @@ export function ImapSyncContainer({
     if (!sourceConnectionConfig || !destinationConnectionConfig) return;
     
     setIsSyncing(true);
+    setSyncError(null);
+    setSyncLogs([]);
+    setSyncProgress(0);
+    
     try {
-      const worker = new Worker('/imap-sync-worker.js');
-      setSyncWorker(worker);
+      // Log the start of the sync process
+      const startTime = new Date().toISOString();
+      setSyncLogs(prev => [...prev, {message: 'Starting IMAP sync process', timestamp: startTime}]);
       
-      // Send the sync configuration to the worker
-      worker.postMessage({
-        sourceConfig: sourceConnectionConfig,
-        destinationConfig: destinationConnectionConfig,
-        syncOptions,
+      // Call the API endpoint to perform the sync
+      const response = await fetch('/api/imap/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sourceConfig: sourceConnectionConfig,
+          destinationConfig: destinationConnectionConfig,
+          syncOptions,
+        }),
       });
+      
+      const data = await response.json();
+      
+      if (data.type === 'error') {
+        setSyncError(data.message);
+        setSyncLogs(prev => [...prev, {message: `Error: ${data.message}`, timestamp: new Date().toISOString()}]);
+      } else {
+        // Update stats and progress
+        setSyncLogs(prev => [...prev, {message: 'Sync completed successfully', timestamp: new Date().toISOString()}]);
+        setSyncProgress(100);
+        setSyncComplete(true);
+        
+        if (data.stats) {
+          setSyncStats({
+            totalMessages: data.stats.totalEmails || 0,
+            processedMessages: data.stats.syncedEmails || 0,
+            errors: data.stats.errors?.length || 0,
+          });
+          
+          // Set detailed sync summary
+          if (data.stats.mailboxes && data.stats.startTime && data.stats.endTime) {
+            setSyncSummary({
+              mailboxes: data.stats.mailboxes,
+              startTime: data.stats.startTime,
+              endTime: data.stats.endTime,
+              elapsedTimeSeconds: data.stats.elapsedTimeSeconds || 0
+            });
+          }
+          
+          // Log detailed stats
+          setSyncLogs(prev => [...prev, {
+            message: `Synced ${data.stats.syncedEmails} of ${data.stats.totalEmails} messages from ${data.stats.processedMailboxes} mailboxes in ${data.stats.elapsedTimeSeconds || 0} seconds`,
+            timestamp: new Date().toISOString()
+          }]);
+          
+          if (data.stats.errors?.length > 0) {
+            data.stats.errors.forEach((error: string) => {
+              setSyncLogs(prev => [...prev, {message: `Error: ${error}`, timestamp: new Date().toISOString()}]);
+            });
+          }
+        }
+      }
     } catch (error) {
       console.error('Error during IMAP sync:', error);
+      setSyncError(error instanceof Error ? error.message : 'Failed to connect to sync API');
+      setSyncLogs(prev => [...prev, {message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, timestamp: new Date().toISOString()}]);
+    } finally {
       setIsSyncing(false);
     }
   };
 
   const handleStopSync = () => {
-    if (syncWorker) {
-      syncWorker.terminate();
-      setSyncWorker(null);
-      setIsSyncing(false);
-    }
+    // Since we're using an API endpoint now, we can't actually stop the sync process
+    // once it's started. We can only update the UI to reflect that we're no longer syncing.
+    setIsSyncing(false);
+    setSyncLogs(prev => [...prev, {message: 'Sync process cancelled by user', timestamp: new Date().toISOString()}]);
+  };
+  
+  const handleReset = () => {
+    setSyncComplete(false);
+    setSyncProgress(undefined);
+    setSyncStats(null);
+    setSyncSummary(null);
+    setSyncLogs([]);
+    setSyncError(null);
   };
 
   return (
@@ -138,6 +221,11 @@ export function ImapSyncContainer({
               onSyncStop={handleStopSync}
               syncProgress={syncProgress}
               syncStats={syncStats}
+              syncLogs={syncLogs}
+              syncError={syncError}
+              syncComplete={syncComplete}
+              syncSummary={syncSummary}
+              onReset={handleReset}
             />
           </div>
         </div>

@@ -1,14 +1,25 @@
 importScripts('https://cdn.jsdelivr.net/npm/imapflow@2.1.0/dist/imap-flow.js');
 
+// Log function that sends logs back to the main thread
+function log(message, data) {
+  self.postMessage({ 
+    type: 'log', 
+    data: { message, data, timestamp: new Date().toISOString() } 
+  });
+}
+
 self.onmessage = async function (event) {
+  log('Worker received message', event.data);
   try {
     const { sourceConfig, destinationConfig, syncOptions } = event.data;
+    log('Processing sync with configs', { sourceConfig, destinationConfig, syncOptions });
     
     if (!sourceConfig || !destinationConfig) {
       self.postMessage({ type: 'error', data: 'Missing required configuration' });
       return;
     }
 
+    log('Initializing source client');
     // Connect to source IMAP server
     const sourceClient = new ImapFlow({
       host: sourceConfig.host,
@@ -21,6 +32,7 @@ self.onmessage = async function (event) {
       },
     });
 
+    log('Initializing destination client');
     // Connect to destination IMAP server
     const destinationClient = new ImapFlow({
       host: destinationConfig.host,
@@ -35,10 +47,17 @@ self.onmessage = async function (event) {
 
     try {
       // Connect to both servers
+      log('Connecting to source server');
       await sourceClient.connect();
+      log('Source server connected, logging in');
       await sourceClient.login();
+      log('Source login successful');
+      
+      log('Connecting to destination server');
       await destinationClient.connect();
+      log('Destination server connected, logging in');
       await destinationClient.login();
+      log('Destination login successful');
 
       // Get mailbox list from source
       const mailboxes = await sourceClient.listMailboxes();
@@ -50,7 +69,7 @@ self.onmessage = async function (event) {
         totalEmails: 0,
         syncedEmails: 0,
         skippedEmails: 0,
-        errors: [] as string[],
+        errors: [],
       };
 
       // Send initial progress
@@ -154,9 +173,10 @@ self.onmessage = async function (event) {
       }
     }
   } catch (error) {
+    log('Critical error in worker', error);
     self.postMessage({ 
       type: 'error', 
-      data: error instanceof Error ? error.message : 'Unknown error occurred' 
+      data: error && error.message ? error.message : 'Unknown error occurred' 
     });
   }
 };
