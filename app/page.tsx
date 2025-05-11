@@ -14,6 +14,8 @@ export default function Home() {
       <ImapSyncContainer
         sourceConfig={sourceConfig}
         destinationConfig={destinationConfig}
+        onSourceConfigChange={setSourceConfig}
+        onDestinationConfigChange={setDestinationConfig}
       />
     </AppShell>
   );
