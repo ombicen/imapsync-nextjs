@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ImapConnectionConfig, NullableImapConnectionConfig, ImapSyncOptions, ImapSyncProgress, ImapSyncStats, ImapSyncResults, ImapSyncState } from '@/app/dashboard/imap/types/imap';
 import { ConnectionConfigSection } from '../connection/connection-config-section';
 import { SyncOptionsSection } from '../config/sync-options-section';
@@ -10,12 +10,16 @@ import { syncImap } from '@/app/dashboard/imap/actions/sync-imap';
 interface ImapSyncContainerProps {
   sourceConfig: NullableImapConnectionConfig;
   destinationConfig: NullableImapConnectionConfig;
+  onSourceConfigChange: (config: ImapConnectionConfig) => void;
+  onDestinationConfigChange: (config: ImapConnectionConfig) => void;
   onSyncComplete?: (results: ImapSyncResults) => void;
 }
 
 export function ImapSyncContainer({
   sourceConfig: initialSourceConfig,
   destinationConfig: initialDestinationConfig,
+  onSourceConfigChange,
+  onDestinationConfigChange,
   onSyncComplete,
 }: ImapSyncContainerProps) {
   const [showSourceForm, setShowSourceForm] = useState(true);
@@ -29,10 +33,6 @@ export function ImapSyncContainer({
     calculateStats: true,
   });
 
-  const [sourceConnectionConfig, setSourceConnectionConfig] = useState<NullableImapConnectionConfig>(initialSourceConfig);
-  const [destinationConnectionConfig, setDestinationConnectionConfig] = useState<NullableImapConnectionConfig>(initialDestinationConfig);
-
-  const isConfigComplete = !!sourceConnectionConfig && !!destinationConnectionConfig;
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<number | undefined>(undefined);
   const [syncStats, setSyncStats] = useState<{
@@ -93,7 +93,7 @@ export function ImapSyncContainer({
   }, [syncWorker]);
 
   const handleStartSync = async () => {
-    if (!sourceConnectionConfig || !destinationConnectionConfig) return;
+    if (!initialSourceConfig || !initialDestinationConfig) return;
     
     setIsSyncing(true);
     setSyncError(null);
@@ -189,21 +189,21 @@ export function ImapSyncContainer({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-8">
           <div>
-              <ConnectionConfigSection
+            <ConnectionConfigSection
               title="Source Server"
-              config={sourceConnectionConfig}
+              config={initialSourceConfig}
               showForm={showSourceForm}
               onToggleForm={() => setShowSourceForm(!showSourceForm)}
-              onSubmit={setSourceConnectionConfig}
+              onSubmit={onSourceConfigChange}
             />
           </div>
           <div>
-             <ConnectionConfigSection
+            <ConnectionConfigSection
               title="Destination Server"
-              config={destinationConnectionConfig}
+              config={initialDestinationConfig}
               showForm={showDestinationForm}
               onToggleForm={() => setShowDestinationForm(!showDestinationForm)}
-              onSubmit={setDestinationConnectionConfig}
+              onSubmit={onDestinationConfigChange}
             />
           </div>
         </div>

@@ -1,7 +1,7 @@
 importScripts('https://cdn.jsdelivr.net/npm/imapflow@2.1.0/dist/imap-flow.js');
 
 // Set a timeout for the connection attempt
-const CONNECTION_TIMEOUT = 10000; // 10 seconds
+const CONNECTION_TIMEOUT = 30000; // Increased to 30 seconds
 
 self.onmessage = async function (event) {
   try {
@@ -40,7 +40,10 @@ self.onmessage = async function (event) {
             message: `IMAP error: ${msg}`
           });
         }
-      }
+      },
+      connectionTimeout: 30000,  // 30 seconds
+      greetingTimeout: 15000,   // 15 seconds
+      socketTimeout: 60000      // 60 seconds
     });
 
     try {
