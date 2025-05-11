@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ImapConnectionConfig, NullableImapConnectionConfig, ImapSyncOptions, ImapSyncProgress, ImapSyncStats, ImapSyncResults, ImapSyncState } from '@/app/dashboard/imap/types/imap';
 import { ConnectionConfigSection } from '../connection/connection-config-section';
 import { SyncOptionsSection } from '../config/sync-options-section';
