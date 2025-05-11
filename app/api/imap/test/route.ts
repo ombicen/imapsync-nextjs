@@ -45,9 +45,9 @@ export async function POST(request: Request) {
           console.error('IMAP error:', obj);
         }
       },
-      connectionTimeout: 10000, // 10 seconds
-      greetingTimeout: 5000,     // 5 seconds
-      socketTimeout: 30000,      // 30 seconds
+      connectionTimeout: 30000, // Increased to 30 seconds
+      greetingTimeout: 15000,   // Increased to 15 seconds
+      socketTimeout: 60000,     // Increased to 60 seconds
       verifyOnly: false
     });
 
