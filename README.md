@@ -4,13 +4,19 @@ A modern web application for synchronizing IMAP mailboxes between different emai
 
 This project was created using [bolt.new](https://bolt.new) as a starting template.
 
+## Serverless Ready
+
+This application is fully compatible with serverless environments like Vercel. It uses Vercel KV (Redis) for cross-instance state management, ensuring real-time sync progress updates work reliably in production.
+
 ## Features
 
 - 🔄 Synchronize emails between IMAP mailboxes
 - 🔄 Configure sync options (batch size, retries, etc.)
-- 📊 Monitor sync status and logs
+- 📊 Monitor sync status and logs in real-time
 - 🔒 Secure connection testing
 - 📱 Responsive design
+- ☁️ Serverless compatible with Vercel KV integration
+- 🔄 Server-Sent Events (SSE) for live progress updates
 
 ## Security
 
@@ -23,6 +29,8 @@ The application runs entirely on the client side, connecting directly to your IM
 - **UI Components**: shadcn/ui
 - **IMAP Library**: ImapFlow
 - **Authentication**: NextAuth.js
+- **State Management**: Vercel KV (Redis)
+- **Real-time Updates**: Server-Sent Events (SSE)
 
 ## Prerequisites
 
@@ -44,7 +52,13 @@ npm install
 yarn install
 ```
 
-3. Start the development server
+3. Set up environment variables (optional for development)
+```bash
+cp .env.example .env.local
+# Edit .env.local with your Vercel KV credentials if needed
+```
+
+4. Start the development server
 ```bash
 npm run dev
 # or
@@ -52,6 +66,15 @@ yarn dev
 ```
 
 The application will be available at `http://localhost:3000`
+
+### Vercel KV Setup (for Production)
+
+For production deployments, you'll need to set up Vercel KV:
+
+1. Create a Vercel KV database from your Vercel dashboard
+2. Configure environment variables as described in [docs/vercel-kv-setup.md](docs/vercel-kv-setup.md)
+
+The application will automatically fall back to in-memory storage during development if Vercel KV isn't configured.
 
 ### IMAP Configuration
 

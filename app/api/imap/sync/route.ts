@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const sessionId = providedSessionId || `sync-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
     
     // Initialize the session in the progress store
-    updateProgress(sessionId, {
+    await updateProgress(sessionId, {
       percentage: 0,
       currentMailbox: '',
       processedMessages: 0,

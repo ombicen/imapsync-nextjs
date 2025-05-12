@@ -34,8 +34,8 @@ type PerformSyncFunction = (
 ) => Promise<void>;
 
 // Initialize a new session - used internally only
-function initSession(sessionId: string) {
-  updateProgress(sessionId, {
+async function initSession(sessionId: string): Promise<ProgressData | null> {
+  await updateProgress(sessionId, {
     percentage: 0,
     currentMailbox: '',
     processedMessages: 0,
@@ -51,7 +51,7 @@ function initSession(sessionId: string) {
     phase: 'start'
   });
   
-  return getProgress(sessionId);
+  return await getProgress(sessionId);
 }
 
 // Function to dynamically import the sync process module
@@ -92,9 +92,10 @@ export async function GET(request: NextRequest) {
   }
   
   // Check if session exists
-  if (!getProgress(sessionId)) {
+  const existingProgress = await getProgress(sessionId);
+  if (!existingProgress) {
     // Initialize session if it doesn't exist
-    initSession(sessionId);
+    await initSession(sessionId);
   }
 
   // Create a text encoder
@@ -102,14 +103,14 @@ export async function GET(request: NextRequest) {
   
   // Create a stream for SSE
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       // Helper function to send SSE data
       const send = (data: any) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
       
       // Send initial data
-      const initialData = getProgress(sessionId);
+      const initialData = await getProgress(sessionId);
       console.log('Sending initial SSE data:', initialData);
       send(initialData);
       
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
       }
       
       // Clear or create an interval to send progress updates
-      const intervalRef = setInterval(() => {
+      const intervalRef = setInterval(async () => {
         try {
           if (request.signal.aborted) {
             clearInterval(intervalRef);
@@ -169,7 +170,7 @@ export async function GET(request: NextRequest) {
           }
 
           // Get the progress for this session
-          const progress = getProgress(sessionId);
+          const progress = await getProgress(sessionId);
 
           // If progress exists, send it
           if (progress) {
