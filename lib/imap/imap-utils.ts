@@ -1,7 +1,21 @@
-import { ImapFlow } from 'imapflow';
-import { ImapConnectionConfig } from '@/lib/types/imap';
+import { ImapFlow } from "imapflow";
+import { ImapConnectionConfig } from "@/lib/types/imap";
 
-export async function connectToImap(config: ImapConnectionConfig): Promise<ImapFlow> {
+// Ensure this file contains the definition of emptyMailbox
+export async function emptyMailbox(
+  client: any,
+  mailbox: string
+): Promise<void> {
+  await client.mailboxOpen(mailbox);
+  const messages = await client.search({ all: true });
+  if (messages.length > 0) {
+    await client.messageDelete(messages);
+    await client.expunge();
+  }
+}
+export async function connectToImap(
+  config: ImapConnectionConfig
+): Promise<ImapFlow> {
   const client = new ImapFlow({
     host: config.host,
     port: config.port,
@@ -32,12 +46,12 @@ interface Mailbox {
 }
 
 export async function getMailboxList(client: ImapFlow): Promise<string[]> {
-  const mailboxes = await client.list('', {
+  const mailboxes = await client.list("", {
     subscribed: false,
     status: true,
-    tree: true
+    tree: true,
   });
-  return mailboxes.map(mailbox => mailbox.name);
+  return mailboxes.map((mailbox) => mailbox.name);
 }
 
 export async function getMailboxTree(client: ImapFlow): Promise<Mailbox[]> {
@@ -45,17 +59,20 @@ export async function getMailboxTree(client: ImapFlow): Promise<Mailbox[]> {
   return mailboxes;
 }
 
-export async function getMailboxInfo(client: ImapFlow, mailbox: string): Promise<MailboxInfo> {
+export async function getMailboxInfo(
+  client: ImapFlow,
+  mailbox: string
+): Promise<MailboxInfo> {
   await client.select(mailbox);
-  const [mailboxInfo] = await client.fetch('1', {
+  const [mailboxInfo] = await client.fetch("1", {
     messages: true,
     unseen: true,
-    recent: true
+    recent: true,
   });
   return {
     messages: mailboxInfo.messages,
     unseen: mailboxInfo.unseen,
-    recent: mailboxInfo.recent
+    recent: mailboxInfo.recent,
   };
 }
 
@@ -70,16 +87,16 @@ export async function syncMailbox(
   }
 ): Promise<{ total: number; copied: number; failed: number }> {
   await sourceClient.select(mailboxPath);
-  const [sourceInfo] = await sourceClient.fetch('1', {
+  const [sourceInfo] = await sourceClient.fetch("1", {
     messages: true,
     unseen: true,
-    recent: true
+    recent: true,
   });
   await destinationClient.select(mailboxPath);
-  const [destinationInfo] = await destinationClient.fetch('1', {
+  const [destinationInfo] = await destinationClient.fetch("1", {
     messages: true,
     unseen: true,
-    recent: true
+    recent: true,
   });
   const totalMessages = sourceInfo.messages;
   let copied = 0;
@@ -94,20 +111,21 @@ export async function syncMailbox(
   // 2. Copy them to destination
   // 3. Handle errors and progress
   // For now, we'll simulate this
-  
+
   const batchSize = syncOptions.batchSize;
   const batches = Math.ceil(totalMessages / batchSize);
-  
+
   for (let i = 0; i < batches; i++) {
     const start = i * batchSize + 1;
     const end = Math.min(start + batchSize - 1, totalMessages);
-    
+
     // Simulate message copying
     const messages = end - start + 1;
     copied += messages;
-    
+
     // Simulate some failures
-    if (Math.random() < 0.01) { // 1% chance of failure
+    if (Math.random() < 0.01) {
+      // 1% chance of failure
       failed++;
     }
   }

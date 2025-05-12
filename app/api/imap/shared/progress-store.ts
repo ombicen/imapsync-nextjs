@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv';
+import { kv } from "@vercel/kv";
 
 // Global progress state shared across requests
 export type ProgressData = {
@@ -8,7 +8,7 @@ export type ProgressData = {
   totalMessages: number;
   processedMailboxes: number;
   totalMailboxes: number;
-  logs: Array<{message: string; timestamp: string}>;
+  logs: Array<{ message: string; timestamp: string }>;
   isComplete: boolean;
   sessionId: string;
   phase?: string;
@@ -18,131 +18,136 @@ export type ProgressData = {
     syncedMessages: number;
     skippedMessages: number;
   }>;
-  // Time tracking fields
   startTime?: string;
   endTime?: string;
   elapsedTimeSeconds?: number;
+  shouldStop?: boolean;
 };
 
-// Prefix for Redis keys to avoid collisions
-const KEY_PREFIX = 'imapsync:progress:';
-
-// The TTL (time-to-live) for progress data in Redis (24 hours in seconds)
+const KEY_PREFIX = "imapsync:progress:";
 const PROGRESS_TTL = 60 * 60 * 24;
-
-// Local in-memory cache for development environments without Redis
 let localProgressStore: Record<string, ProgressData> = {};
+const isServerless = process.env.VERCEL === "1";
 
-// Check if we're running in a serverless environment
-const isServerless = process.env.VERCEL === '1';
-
-// Helper to determine if Vercel KV is available
 const isKvAvailable = (): boolean => {
-   const vars = ['KV_REDIS_KV_URL', 'KV_REST_API_URL', 'KV_REST_API_TOKEN'];
-   const hasCreds = vars.every((v) => !!process.env[v]);
-   return isServerless && typeof kv !== 'undefined' && hasCreds;
-  };
+  const requiredVars = [
+    "KV_REDIS_KV_URL",
+    "KV_REST_API_URL",
+    "KV_REST_API_TOKEN",
+  ];
+  return (
+    isServerless &&
+    typeof kv !== "undefined" &&
+    requiredVars.every((v) => !!process.env[v])
+  );
+};
 
-// Function to update progress for a specific session
-export async function updateProgress(sessionId: string, data: Partial<ProgressData>): Promise<ProgressData> {
-  // Determine the key for this session
+const getDefaultProgressData = (sessionId: string): ProgressData => ({
+  percentage: 0,
+  currentMailbox: "",
+  processedMessages: 0,
+  totalMessages: 0,
+  processedMailboxes: 0,
+  totalMailboxes: 0,
+  logs: [],
+  isComplete: false,
+  sessionId,
+  phase: "start",
+});
+
+const handleKvError = (
+  err: unknown,
+  fallbackStore: Record<string, ProgressData>,
+  sessionId: string,
+  data: ProgressData
+) => {
+  console.error("KV operation failed, falling back to memory store", err);
+  fallbackStore[sessionId] = data;
+};
+
+export async function updateProgress(
+  sessionId: string,
+  data: Partial<ProgressData>
+): Promise<ProgressData> {
   const key = `${KEY_PREFIX}${sessionId}`;
-  
   let currentProgress: ProgressData;
-  
-  // Get the current progress data
+
   if (isKvAvailable()) {
-    // When using Vercel KV
-    currentProgress = await kv.get<ProgressData>(key) || {
-      percentage: 0,
-      currentMailbox: '',
-      processedMessages: 0,
-      totalMessages: 0,
-      processedMailboxes: 0,
-      totalMailboxes: 0,
-      logs: [],
-      isComplete: false,
-      sessionId,
-      phase: 'start'
-    };
-  } else {
-    // Fallback to local storage for development
-    console.warn('Vercel KV not available, using local memory store. This will not persist across serverless invocations.');
-    if (!localProgressStore[sessionId]) {
-      localProgressStore[sessionId] = {
-        percentage: 0,
-        currentMailbox: '',
-        processedMessages: 0,
-        totalMessages: 0,
-        processedMailboxes: 0,
-        totalMailboxes: 0,
-        logs: [],
-        isComplete: false,
-        sessionId,
-        phase: 'start'
-      };
+    try {
+      currentProgress =
+        (await kv.get<ProgressData>(key)) || getDefaultProgressData(sessionId);
+    } catch (err) {
+      console.error("Failed to fetch progress from KV", err);
+      currentProgress = getDefaultProgressData(sessionId);
     }
-    currentProgress = localProgressStore[sessionId];
+  } else {
+    console.warn("Vercel KV not available, using local memory store.");
+    currentProgress =
+      localProgressStore[sessionId] || getDefaultProgressData(sessionId);
   }
-  
-  // Update the progress data
+
   const updatedProgress: ProgressData = {
     ...currentProgress,
     ...data,
-    // Append new logs if provided and limit to last 100 entries
-    logs: data.logs 
+    logs: data.logs
       ? [...currentProgress.logs, ...data.logs].slice(-100)
-      : currentProgress.logs
+      : currentProgress.logs,
   };
-  
-  // Store the updated progress
+
   if (isKvAvailable()) {
-    // Store in Vercel KV with TTL
     try {
       await kv.set(key, updatedProgress, { ex: PROGRESS_TTL });
     } catch (err) {
-      console.error('KV write failed, falling back to memory store', err);
-      localProgressStore[sessionId] = updatedProgress;
+      handleKvError(err, localProgressStore, sessionId, updatedProgress);
     }
   } else {
-    // Store in local memory
     localProgressStore[sessionId] = updatedProgress;
   }
-  
+
   return updatedProgress;
 }
 
-// Function to get progress data for a specific session
-export async function getProgress(sessionId: string): Promise<ProgressData | null> {
+export async function getProgress(
+  sessionId: string
+): Promise<ProgressData | null> {
   const key = `${KEY_PREFIX}${sessionId}`;
-  
+
   if (isKvAvailable()) {
-    return await kv.get<ProgressData>(key);
+    try {
+      return await kv.get<ProgressData>(key);
+    } catch (err) {
+      console.error("Failed to fetch progress from KV", err);
+      return null;
+    }
   } else {
     return localProgressStore[sessionId] || null;
   }
 }
 
-// Function to clear progress data for a specific session
 export async function clearProgress(sessionId: string): Promise<void> {
   const key = `${KEY_PREFIX}${sessionId}`;
-  
+
   if (isKvAvailable()) {
-    await kv.del(key);
+    try {
+      await kv.del(key);
+    } catch (err) {
+      console.error("Failed to delete progress from KV", err);
+    }
   } else {
     delete localProgressStore[sessionId];
   }
 }
 
-// Function to get all active session IDs
 export async function getActiveSessions(): Promise<string[]> {
   if (isKvAvailable()) {
-    // In a production environment, list keys with the progress prefix
-    // Note: This pattern scan might not be efficient for large datasets
-    const keys = await kv.keys(`${KEY_PREFIX}*`);
-    return keys.map(key => key.replace(KEY_PREFIX, ''));
+    try {
+      const keys = await kv.keys(`${KEY_PREFIX}*`);
+      return keys.map((key) => key.replace(KEY_PREFIX, ""));
+    } catch (err) {
+      console.error("Failed to fetch active sessions from KV", err);
+      return [];
+    }
   } else {
-    // In development, return from local store
     return Object.keys(localProgressStore);
   }
 }
