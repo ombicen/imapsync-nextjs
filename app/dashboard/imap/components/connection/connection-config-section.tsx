@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDownIcon, ChevronUpIcon, Mail } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, Mail, Settings, Terminal } from "lucide-react";
 import { ImapConfigForms } from "./forms/config-forms";
 import { ImapConnectionStatus } from "./status/connection-status";
 import { ConnectionLog } from "./log/connection-log";
@@ -117,11 +117,12 @@ export function ConnectionConfigSection({
               size="sm"
               onClick={onToggleForm}
               disabled={disabled}
+              title={showForm ? "Show connection log" : "Configure settings"}
             >
               {showForm ? (
-                <ChevronUpIcon className="h-4 w-4" />
+                <Terminal className="h-4 w-4" />
               ) : (
-                <ChevronDownIcon className="h-4 w-4" />
+                <Settings className="h-4 w-4" />
               )}
             </Button>
           </div>
@@ -136,6 +137,15 @@ export function ConnectionConfigSection({
             onSubmit={(values) => {
               setFormValues(values);
               onSubmit(values);
+              // Check if all required fields are filled, auto toggle to connection log
+              // Works for both source and destination servers
+              if (values.host && 
+                  values.port && 
+                  values.username && 
+                  values.password) {
+                // Auto-toggle to connection log view
+                setTimeout(() => onToggleForm(), 500);
+              }
             }}
             disabled={disabled}
           />

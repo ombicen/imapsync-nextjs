@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ interface SyncStatusSectionProps {
     totalMessages: number;
     processedMessages: number;
     errors: number;
+    currentMailbox?: string; // Add current mailbox property
   } | null;
   syncLogs?: {message: string; timestamp: string}[];
   syncError?: string | null;
@@ -37,18 +38,64 @@ interface SyncStatusSectionProps {
   onReset?: () => void;
 }
 
+// Helper function to calculate estimated time remaining
+function calculateTimeRemaining(processed: number, total: number, logs: {message: string; timestamp: string}[]): string {
+  if (logs.length < 2 || processed === 0) return 'Calculating...';
+  
+  // Get the start time from the first log
+  const startTime = new Date(logs[0].timestamp).getTime();
+  // Get the current time from the latest log
+  const currentTime = new Date(logs[logs.length - 1].timestamp).getTime();
+  
+  // Calculate elapsed time in seconds
+  const elapsedSeconds = (currentTime - startTime) / 1000;
+  
+  // Calculate rate of messages per second
+  const rate = processed / elapsedSeconds;
+  
+  // If rate is too low, return calculating
+  if (rate < 0.01) return 'Calculating...';
+  
+  // Calculate remaining time
+  const remaining = (total - processed) / rate;
+  
+  // Format the time
+  if (remaining < 60) {
+    return `${Math.ceil(remaining)} seconds`;
+  } else if (remaining < 3600) {
+    return `${Math.ceil(remaining / 60)} minutes`;
+  } else {
+    const hours = Math.floor(remaining / 3600);
+    const minutes = Math.ceil((remaining % 3600) / 60);
+    return `${hours} hours ${minutes} minutes`;
+  }
+}
+
 export function SyncStatusSection({
   isSyncing,
   onSyncStart,
   onSyncStop,
-  syncProgress,
+  syncProgress = 0,
   syncStats,
   syncLogs = [],
-  syncError = null,
-  syncComplete = false,
-  syncSummary = null,
+  syncError,
+  syncComplete,
+  syncSummary,
   onReset,
 }: SyncStatusSectionProps) {
+  // Create references for the event log containers
+  const syncingLogRef = useRef<HTMLDivElement>(null);
+  const completedLogRef = useRef<HTMLDivElement>(null);
+  
+  // Auto-scroll logs to bottom when new entries are added
+  useEffect(() => {
+    if (syncingLogRef.current) {
+      syncingLogRef.current.scrollTop = syncingLogRef.current.scrollHeight;
+    }
+    if (completedLogRef.current) {
+      completedLogRef.current.scrollTop = completedLogRef.current.scrollHeight;
+    }
+  }, [syncLogs]);
   return (
     <Card className="w-full">
       <CardHeader>
@@ -139,6 +186,21 @@ export function SyncStatusSection({
                     </div>
                   )}
                   
+                  {/* Event log in completion view */}
+                  {syncLogs && syncLogs.length > 0 && (
+                    <div 
+                      ref={completedLogRef}
+                      className="w-full max-h-60 overflow-y-auto border rounded p-2 text-xs bg-gray-50"
+                    >
+                      <div className="font-medium text-gray-700 mb-2 pb-1 border-b">Event Log</div>
+                      {syncLogs.map((log, index) => (
+                        <div key={index} className="mb-1 break-words">
+                          <span className="text-gray-500 font-mono">[{new Date(log.timestamp).toLocaleTimeString()}]</span> {log.message}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
                   <Button
                     onClick={onReset}
                     className="w-full"
@@ -166,19 +228,39 @@ export function SyncStatusSection({
                   </div>
                 )}
                 {syncStats && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div className="text-sm font-medium">Total Messages</div>
-                      <div className="text-lg font-bold">{syncStats.totalMessages}</div>
+                  <div className="space-y-4">
+                    {/* Current mailbox indicator */}
+                    {syncStats.currentMailbox && (
+                      <div className="text-center p-2 bg-blue-50 border border-blue-200 rounded">
+                        <div className="text-sm font-medium text-blue-700">Current Mailbox</div>
+                        <div className="text-md font-bold text-blue-800">{syncStats.currentMailbox}</div>
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <div className="text-sm font-medium">Total Messages</div>
+                        <div className="text-lg font-bold">{syncStats.totalMessages}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm font-medium">Processed</div>
+                        <div className="text-lg font-bold">{syncStats.processedMessages}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm font-medium">Errors</div>
+                        <div className="text-lg font-bold">{syncStats.errors}</div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-sm font-medium">Processed</div>
-                      <div className="text-lg font-bold">{syncStats.processedMessages}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-sm font-medium">Errors</div>
-                      <div className="text-lg font-bold">{syncStats.errors}</div>
-                    </div>
+                    
+                    {/* Estimated time remaining */}
+                    {syncStats.processedMessages > 0 && syncStats.totalMessages > 0 && (
+                      <div className="text-center p-2 bg-gray-50 rounded">
+                        <div className="text-sm font-medium">Estimated Time Remaining</div>
+                        <div className="text-md">
+                          {calculateTimeRemaining(syncStats.processedMessages, syncStats.totalMessages, syncLogs)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {syncError && (
@@ -190,10 +272,14 @@ export function SyncStatusSection({
                 )}
                 
                 {syncLogs.length > 0 && (
-                  <div className="mt-4 max-h-40 overflow-y-auto border rounded p-2 text-xs">
+                  <div 
+                    ref={syncingLogRef}
+                    className="mt-4 w-full max-h-60 overflow-y-auto border rounded p-2 text-xs bg-gray-50"
+                  >
+                    <div className="font-medium text-gray-700 mb-2 pb-1 border-b">Event Log</div>
                     {syncLogs.map((log, index) => (
-                      <div key={index} className="mb-1">
-                        <span className="text-gray-500">[{new Date(log.timestamp).toLocaleTimeString()}]</span> {log.message}
+                      <div key={index} className="mb-1 break-words">
+                        <span className="text-gray-500 font-mono">[{new Date(log.timestamp).toLocaleTimeString()}]</span> {log.message}
                       </div>
                     ))}
                   </div>

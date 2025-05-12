@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  // Change from 'export' to standard mode to allow SSE
+  // output: 'export',
   eslint: {
     ignoreDuringBuilds: true,
   },
