@@ -1,5 +1,5 @@
 import { ImapFlow } from "imapflow";
-import { updateProgress } from "../sse/route";
+import { updateProgress } from "../shared/progress-store";
 
 // Define interfaces for ImapFlow types
 interface ImapMailbox {
