@@ -146,7 +146,7 @@ export async function performSync(
     stats.totalMailboxes = mailboxes.length;
     
     // Update progress with total mailboxes
-    updateProgress(sessionId, {
+    await updateProgress(sessionId, {
       totalMailboxes: mailboxes.length,
       totalMessages: 0, // Will be updated as we process mailboxes
       percentage: 5, // Initial progress after connection
@@ -167,7 +167,7 @@ export async function performSync(
       console.log(`Processing mailbox: ${mailboxName}`);
       
       // Update progress with current mailbox including stats count
-      updateProgress(sessionId, {
+      await updateProgress(sessionId, {
         currentMailbox: mailboxName,
         processedMailboxes: i,
         logs: [{
@@ -215,7 +215,7 @@ export async function performSync(
           console.log(`Total messages in ${mailboxName}: ${status.messages}`);
           
           // Update total message count in progress
-          updateProgress(sessionId, {
+          await updateProgress(sessionId, {
             totalMessages: stats.totalEmails
           });
           console.log(`Updated totalMessages: ${stats.totalEmails}`);
@@ -263,7 +263,7 @@ export async function performSync(
               mailboxStats.skippedMessages = 0;
               
               // Update progress for empty mailbox
-              updateProgress(sessionId, {
+              await updateProgress(sessionId, {
                 currentMailbox: mailboxName,
                 processedMailboxes: i,
                 percentage: Math.min(95, 5 + Math.floor(((i+1) / maxMailboxes) * 90)),
@@ -298,7 +298,7 @@ export async function performSync(
               }
               
               // Update progress with detailed message and fresh timestamp
-              updateProgress(sessionId, {
+              await updateProgress(sessionId, {
                 processedMessages: totalProcessedMessages,
                 totalMessages: stats.totalEmails,
                 percentage: percentage,
@@ -345,7 +345,7 @@ export async function performSync(
                     // Add periodic progress updates for successful transfers (every 5 messages)
                     if (stats.syncedEmails % 5 === 0) {
                       const totalProcessed = stats.syncedEmails + stats.skippedEmails;
-                      updateProgress(sessionId, {
+                      await updateProgress(sessionId, {
                         processedMessages: totalProcessed,
                         percentage: Math.min(95, 5 + Math.floor((totalProcessed / stats.totalEmails) * 90)),
                         logs: [{
@@ -367,7 +367,7 @@ export async function performSync(
                   stats.skippedEmails++;
                   
                   const totalProcessed = stats.syncedEmails + stats.skippedEmails;
-                  updateProgress(sessionId, {
+                  await updateProgress(sessionId, {
                     processedMessages: totalProcessed,
                     percentage: Math.min(95, 5 + Math.floor(((i+1) / maxMailboxes) * 90)),
                     logs: [{
@@ -402,7 +402,7 @@ export async function performSync(
     console.log(`Sync process elapsed time: ${stats.elapsedTimeSeconds} seconds`);
     
     // Mark progress as complete with detailed statistics
-    updateProgress(sessionId, {
+    await updateProgress(sessionId, {
       processedMessages: stats.totalEmails, // Ensure we show all messages as processed
       percentage: 100,
       isComplete: true,
@@ -422,7 +422,7 @@ export async function performSync(
     console.error('IMAP sync error:', error);
     
     // Update progress with error
-    updateProgress(sessionId, {
+    await updateProgress(sessionId, {
       logs: [{
         message: `Error: ${error.message || 'Unknown error'}`,
         timestamp: new Date().toISOString()
