@@ -1,10 +1,23 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { ImapConnectionConfig, NullableImapConnectionConfig, ImapSyncOptions, ImapSyncResults } from '@/app/dashboard/imap/types/imap';
-import { ConnectionConfigSection } from '../connection/connection-config-section';
-import { SyncOptionsSection } from '../config/sync-options-section';
-import { SyncStatusSection } from '../sync/sync-status-section';
+import { useState, useEffect, useRef } from "react";
+import {
+  ImapConnectionConfig,
+  NullableImapConnectionConfig,
+  ImapSyncOptions,
+  ImapSyncResults,
+} from "@/app/dashboard/imap/types/imap";
+import { ConnectionConfigSection } from "../connection/connection-config-section";
+import { SyncOptionsSection } from "../config/sync-options-section";
+import { SyncStatusSection } from "../sync/sync-status-section";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 interface ImapSyncContainerProps {
   sourceConfig: NullableImapConnectionConfig;
@@ -33,14 +46,18 @@ export function ImapSyncContainer({
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<number | undefined>(undefined);
+  const [syncProgress, setSyncProgress] = useState<number | undefined>(
+    undefined
+  );
   const [syncStats, setSyncStats] = useState<{
     totalMessages: number;
     processedMessages: number;
     errors: number;
     currentMailbox?: string;
   } | null>(null);
-  const [syncLogs, setSyncLogs] = useState<{message: string; timestamp: string}[]>([]);
+  const [syncLogs, setSyncLogs] = useState<
+    { message: string; timestamp: string }[]
+  >([]);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncComplete, setSyncComplete] = useState(false);
   const [syncSummary, setSyncSummary] = useState<{
@@ -55,18 +72,20 @@ export function ImapSyncContainer({
     elapsedTimeSeconds: number;
   } | null>(null);
 
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+
   // Reference to the AbortController for fetch requests
   const abortControllerRef = useRef<AbortController | null>(null);
-  
+
   // Reference to the current SSE session ID
   const sessionIdRef = useRef<string | null>(null);
-  
+
   // Reference to the EventSource instance
   const eventSourceRef = useRef<EventSource | null>(null);
-  
+
   // Function to generate a unique session ID
   const generateUniqueSessionId = () => {
-    return 'session-' + Math.random().toString(36).substr(2, 9);
+    return "session-" + Math.random().toString(36).substr(2, 9);
   };
 
   // Setup EventSource when syncing starts/stops
@@ -81,24 +100,28 @@ export function ImapSyncContainer({
     }
 
     console.log(`Setting up EventSource for session ${sessionIdRef.current}`);
-    
+
     // Create URL and append config parameters if needed
     let sseUrl = `/api/imap/sse?sessionId=${sessionIdRef.current}`;
-    
+
     // If we have source and destination configs, add them as base64 encoded params
     // This allows us to start the sync process from the SSE connection
     if (initialSourceConfig && initialDestinationConfig) {
       const sourceConfigEncoded = btoa(JSON.stringify(initialSourceConfig));
       const destConfigEncoded = btoa(JSON.stringify(initialDestinationConfig));
-      const syncOptionsEncoded = syncOptions ? btoa(JSON.stringify(syncOptions)) : '';
-      
-      sseUrl += `&startSync=true&sourceConfig=${encodeURIComponent(sourceConfigEncoded)}&destConfig=${encodeURIComponent(destConfigEncoded)}`;
-      
+      const syncOptionsEncoded = syncOptions
+        ? btoa(JSON.stringify(syncOptions))
+        : "";
+
+      sseUrl += `&startSync=true&sourceConfig=${encodeURIComponent(
+        sourceConfigEncoded
+      )}&destConfig=${encodeURIComponent(destConfigEncoded)}`;
+
       if (syncOptionsEncoded) {
         sseUrl += `&syncOptions=${encodeURIComponent(syncOptionsEncoded)}`;
       }
     }
-    
+
     const es = new EventSource(sseUrl);
     eventSourceRef.current = es;
 
@@ -106,49 +129,49 @@ export function ImapSyncContainer({
     es.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('SSE data received:', data);
-        
+        console.log("SSE data received:", data);
+
         // Update progress
         if (data.percentage !== undefined) {
           setSyncProgress(data.percentage);
         }
-        
+
         // Update stats
         if (data.processedMessages !== undefined) {
-          setSyncStats(prev => ({
+          setSyncStats((prev) => ({
             processedMessages: data.processedMessages || 0,
             totalMessages: data.totalMessages || 0,
             processedMailboxes: data.processedMailboxes || 0,
             totalMailboxes: data.totalMailboxes || 0,
             errors: prev?.errors || 0,
-            currentMailbox: data.currentMailbox
+            currentMailbox: data.currentMailbox,
           }));
         }
-        
+
         // Update logs
         if (data.logs && data.logs.length > 0) {
-          setSyncLogs(prev => [...prev, ...data.logs]);
+          setSyncLogs((prev) => [...prev, ...data.logs]);
         }
-        
+
         // Handle completion
         if (data.isComplete) {
           setSyncComplete(true);
           setIsSyncing(false);
-          
+
           // Create summary
           setSyncSummary({
             mailboxes: data.mailboxes || [],
             startTime: data.startTime || new Date().toISOString(),
             endTime: data.endTime || new Date().toISOString(),
-            elapsedTimeSeconds: data.elapsedTimeSeconds || 0
+            elapsedTimeSeconds: data.elapsedTimeSeconds || 0,
           });
-          
+
           if (es) {
             es.close();
             eventSourceRef.current = null;
           }
         }
-        
+
         if (data.error) {
           setSyncError(data.error);
           setIsSyncing(false);
@@ -158,14 +181,14 @@ export function ImapSyncContainer({
           }
         }
       } catch (err) {
-        console.error('Error parsing SSE message:', err);
+        console.error("Error parsing SSE message:", err);
       }
     };
 
     // Handle SSE errors
     es.onerror = (error) => {
-      console.error('EventSource error:', error);
-      setSyncError('Connection to server lost. Please try again.');
+      console.error("EventSource error:", error);
+      setSyncError("Connection to server lost. Please try again.");
       setIsSyncing(false);
       if (es) {
         es.close();
@@ -174,12 +197,12 @@ export function ImapSyncContainer({
     };
 
     return () => {
-      console.log('Cleaning up EventSource connection');
+      console.log("Cleaning up EventSource connection");
       es.close();
       eventSourceRef.current = null;
     };
   }, [isSyncing, initialSourceConfig, initialDestinationConfig, syncOptions]);
-  
+
   // Setup and cleanup for fetch requests
   useEffect(() => {
     return () => {
@@ -190,77 +213,119 @@ export function ImapSyncContainer({
     };
   }, []);
 
+  // Show error dialog when syncError is set
+  useEffect(() => {
+    if (syncError) setShowErrorDialog(true);
+  }, [syncError]);
+
   const handleStartSync = async () => {
-    console.log('Start sync button clicked');
-    
+    console.log("Start sync button clicked");
+
     if (!initialSourceConfig || !initialDestinationConfig) {
-      console.error('Source or destination config missing');
+      // Reset dialog before setting error to force re-open
+      setShowErrorDialog(false);
+      setTimeout(() => {
+        setSyncError(`Source or destination config missing (${Date.now()})`); // Unique string each time
+      }, 0);
       return;
     }
-    
+
     // Reset UI state for a new sync
+    setSyncError(null); // Always clear error before starting
+    setShowErrorDialog(false);
     setSyncProgress(0);
     setSyncStats(null);
     setSyncLogs([]);
-    setSyncError(null);
     setSyncComplete(false);
     setSyncSummary(null);
-    
+
     // Abort any existing requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
-    
+
     try {
-      console.log('Calling /api/imap/sse endpoint to create session');
-      const response = await fetch('/api/imap/sse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      console.log("Calling /api/imap/sse endpoint to create session");
+      const response = await fetch("/api/imap/sse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceConfig: initialSourceConfig,
           destinationConfig: initialDestinationConfig,
-          syncOptions
+          syncOptions,
         }),
-        signal: abortControllerRef.current.signal
+        signal: abortControllerRef.current.signal,
       });
-      
+
       const data = await response.json();
-      console.log('SSE session creation response:', data);
-      
+      console.log("SSE session creation response:", data);
+
       if (data.error) {
-        setSyncError(data.error);
+        setShowErrorDialog(false);
+        setTimeout(() => {
+          setSyncError(`${data.error} (${Date.now()})`); // Unique string
+        }, 0);
         return;
       }
-      
+
       if (data.sessionId) {
         // Store the session ID in the ref
         sessionIdRef.current = data.sessionId;
         setIsSyncing(true); // This will trigger the useEffect to establish the SSE connection
       } else {
-        setSyncError('No session ID received from server');
+        setShowErrorDialog(false);
+        setTimeout(() => {
+          setSyncError(`No session ID received from server (${Date.now()})`); // Unique string
+        }, 0);
       }
     } catch (error: any) {
-      console.error('Error starting sync:', error);
-      setSyncError(error.message || 'Failed to start sync process');
+      console.error("Error starting sync:", error);
+      setShowErrorDialog(false);
+      setTimeout(() => {
+        setSyncError(
+          `${error.message || "Failed to start sync process"} (${Date.now()})`
+        );
+      }, 0);
     }
   };
-  
-  const handleStopSync = () => {
-    // We can't actually stop the sync process on the server side once it's started.
-    // We can only update the UI to reflect that we're no longer syncing.
-    setIsSyncing(false);
-    setSyncLogs(prev => [...prev, {message: 'Sync process cancelled by user', timestamp: new Date().toISOString()}]);
-    
-    // Abort any pending fetch requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+
+  const handleStopSync = async () => {
+    try {
+      if (sessionIdRef.current) {
+        const response = await fetch("/api/imap/sync/stop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: sessionIdRef.current }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to stop sync process");
+        }
+
+        setSyncLogs((prev) => [
+          ...prev,
+          {
+            message: "Sync process stopped successfully",
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch (error: any) {
+      console.error("Error stopping sync:", error);
+      setSyncLogs((prev) => [
+        ...prev,
+        {
+          message: `Error stopping sync: ${error.message}`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setIsSyncing(false);
+      sessionIdRef.current = null;
     }
-    // The EventSource will be closed in the useEffect cleanup
-    sessionIdRef.current = null;
   };
-  
+
   const handleReset = () => {
     setSyncComplete(false);
     setSyncProgress(undefined);
@@ -268,7 +333,7 @@ export function ImapSyncContainer({
     setSyncSummary(null);
     setSyncLogs([]);
     setSyncError(null);
-    
+
     // Abort any pending fetch requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -279,51 +344,68 @@ export function ImapSyncContainer({
   };
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-8">
-          <div>
-            <ConnectionConfigSection
-              title="Source Server"
-              config={initialSourceConfig}
-              showForm={showSourceForm}
-              onToggleForm={() => setShowSourceForm(!showSourceForm)}
-              onSubmit={onSourceConfigChange}
-            />
+    <>
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sync Error</AlertDialogTitle>
+            <AlertDialogDescription>
+              {syncError || "An unknown error occurred while starting sync."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogAction onClick={() => setShowErrorDialog(false)}>
+            OK
+          </AlertDialogAction>
+        </AlertDialogContent>
+      </AlertDialog>
+      <div className="space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-8">
+            <div>
+              <ConnectionConfigSection
+                title="Source Server"
+                config={initialSourceConfig}
+                showForm={showSourceForm}
+                onToggleForm={() => setShowSourceForm(!showSourceForm)}
+                onSubmit={onSourceConfigChange}
+              />
+            </div>
+            <div>
+              <SyncOptionsSection
+                syncOptions={syncOptions}
+                onOptionsChange={setSyncOptions}
+              />
+            </div>
           </div>
-          <div>
-            <SyncOptionsSection
-              syncOptions={syncOptions}
-              onOptionsChange={setSyncOptions}
-            />
-          </div>
-        </div>
-        <div className="space-y-8">
-          <div>
-            <ConnectionConfigSection
-              title="Destination Server"
-              config={initialDestinationConfig}
-              showForm={showDestinationForm}
-              onToggleForm={() => setShowDestinationForm(!showDestinationForm)}
-              onSubmit={onDestinationConfigChange}
-            />
-          </div>
-          <div>
-            <SyncStatusSection
-              isSyncing={isSyncing}
-              syncProgress={syncProgress}
-              syncStats={syncStats}
-              syncLogs={syncLogs}
-              syncError={syncError}
-              syncComplete={syncComplete}
-              syncSummary={syncSummary}
-              onSyncStart={handleStartSync}
-              onSyncStop={handleStopSync}
-              onReset={handleReset}
-            />
+          <div className="space-y-8">
+            <div>
+              <ConnectionConfigSection
+                title="Destination Server"
+                config={initialDestinationConfig}
+                showForm={showDestinationForm}
+                onToggleForm={() =>
+                  setShowDestinationForm(!showDestinationForm)
+                }
+                onSubmit={onDestinationConfigChange}
+              />
+            </div>
+            <div>
+              <SyncStatusSection
+                isSyncing={isSyncing}
+                syncProgress={syncProgress}
+                syncStats={syncStats}
+                syncLogs={syncLogs}
+                syncError={syncError}
+                syncComplete={syncComplete}
+                syncSummary={syncSummary}
+                onSyncStart={handleStartSync}
+                onSyncStop={handleStopSync}
+                onReset={handleReset}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
