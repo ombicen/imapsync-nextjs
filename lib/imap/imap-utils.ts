@@ -6,11 +6,31 @@ export async function emptyMailbox(
   client: any,
   mailbox: string
 ): Promise<void> {
+  let deleted = false;
   try {
     await client.mailboxDelete(mailbox);
+    deleted = true;
   } catch (err) {
-    // Ignore error if mailbox does not exist or cannot be deleted
+    // If mailbox cannot be deleted, fall back to deleting all messages
   }
+  if (!deleted) {
+    // Try to open the mailbox and delete all messages
+    try {
+      await client.mailboxOpen(mailbox);
+      const uids = await client.search({ all: true });
+      if (uids && uids.length > 0) {
+        await client.messageDelete(uids);
+        if (typeof client.expunge === "function") {
+          await client.expunge();
+        } else if (typeof client.messageExpunge === "function") {
+          await client.messageExpunge();
+        }
+      }
+    } catch (err) {
+      // Ignore errors if mailbox cannot be opened or messages cannot be deleted
+    }
+  }
+  // Always recreate the mailbox to ensure it exists and is empty
   await client.mailboxCreate(mailbox);
 }
 
