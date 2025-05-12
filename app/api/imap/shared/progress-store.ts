@@ -47,7 +47,7 @@ export function updateProgress(sessionId: string, data: Partial<ProgressData>) {
     ...data,
     // Append new logs if provided
     logs: data.logs 
-      ? [...progressStore[sessionId].logs, ...data.logs] 
+      ? [...progressStore[sessionId].logs, ...data.logs].slice(-100)
       : progressStore[sessionId].logs
   };
   

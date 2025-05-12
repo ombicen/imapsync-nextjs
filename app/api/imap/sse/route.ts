@@ -3,37 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Helper function to encode SSE messages
-function encodeSSE(event: string, data: any) {
-  const encoder = new TextEncoder();
-  return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
 // Import from shared progress store
 import { ProgressData, getProgress, updateProgress } from "../shared/progress-store";
 
-// Initialize a new session
-export function initSession(sessionId: string) {
-  updateProgress(sessionId, {
-    percentage: 0,
-    currentMailbox: '',
-    processedMessages: 0,
-    totalMessages: 0,
-    processedMailboxes: 0,
-    totalMailboxes: 0,
-    logs: [{
-      message: 'Initializing sync session',
-      timestamp: new Date().toISOString()
-    }],
-    isComplete: false,
-    sessionId,
-    phase: 'start'
-  });
-  
-  return getProgress(sessionId);
-}
-
-// SSE endpoint for real-time progress updates
 // Types for config and sync options
 interface ImapConfig {
   host: string;
@@ -61,6 +33,28 @@ type PerformSyncFunction = (
   syncOptions?: SyncOptions
 ) => Promise<void>;
 
+// Initialize a new session - used internally only
+function initSession(sessionId: string) {
+  updateProgress(sessionId, {
+    percentage: 0,
+    currentMailbox: '',
+    processedMessages: 0,
+    totalMessages: 0,
+    processedMailboxes: 0,
+    totalMailboxes: 0,
+    logs: [{
+      message: 'Initializing sync session',
+      timestamp: new Date().toISOString()
+    }],
+    isComplete: false,
+    sessionId,
+    phase: 'start'
+  });
+  
+  return getProgress(sessionId);
+}
+
+// Function to dynamically import the sync process module
 const importSyncProcess = async (): Promise<PerformSyncFunction> => {
   try {
     const syncModulePath = '../sync/sync-process';
@@ -76,35 +70,6 @@ const importSyncProcess = async (): Promise<PerformSyncFunction> => {
     throw new Error('Failed to load sync module');
   }
 };
-
-// Function to start the actual sync process
-async function startSyncProcess(
-  sessionId: string, 
-  sourceConfig: ImapConfig, 
-  destinationConfig: ImapConfig, 
-  syncOptions?: SyncOptions
-) {
-  try {
-    console.log(`Starting sync process for session ${sessionId}`);
-    
-    // Start the sync process directly without making an HTTP request
-    // This avoids the issues with server-side fetch in Next.js API routes
-    // The process will run asynchronously
-    performSync(sessionId, sourceConfig, destinationConfig, syncOptions);
-    
-    return { success: true, message: 'Sync process started' };
-  } catch (error) {
-    console.error(`Error starting sync process:`, error);
-    updateProgress(sessionId, {
-      logs: [{
-        message: `Error starting sync: ${error instanceof Error ? error.message : String(error)}`,
-        timestamp: new Date().toISOString()
-      }],
-      isComplete: true
-    });
-    return { error: `Failed to start sync process: ${error instanceof Error ? error.message : String(error)}` };
-  }
-}
 
 // SSE endpoint for real-time progress updates
 export async function GET(request: NextRequest) {
