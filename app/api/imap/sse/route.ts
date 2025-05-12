@@ -3,97 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Helper function to encode SSE messages
-function encodeSSE(event: string, data: any) {
-  const encoder = new TextEncoder();
-  return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
+// Import from shared progress store
+import { ProgressData, getProgress, updateProgress } from "../shared/progress-store";
 
-// Global progress state shared across requests
-type ProgressData = {
-  percentage: number;
-  currentMailbox: string;
-  processedMessages: number;
-  totalMessages: number;
-  processedMailboxes: number;
-  totalMailboxes: number;
-  logs: Array<{message: string; timestamp: string}>;
-  isComplete: boolean;
-  sessionId: string;
-  phase?: string;
-};
-
-// Store progress data by session ID
-const progressStore: Record<string, ProgressData> = {};
-
-// Function to update progress for a specific session
-export function updateProgress(sessionId: string, data: Partial<ProgressData>) {
-  if (!progressStore[sessionId]) {
-    progressStore[sessionId] = {
-      percentage: 0,
-      currentMailbox: '',
-      processedMessages: 0,
-      totalMessages: 0,
-      processedMailboxes: 0,
-      totalMailboxes: 0,
-      logs: [],
-      isComplete: false,
-      sessionId,
-      phase: 'start'
-    };
-  }
-  
-  progressStore[sessionId] = {
-    ...progressStore[sessionId],
-    ...data
-  };
-  
-  // If marked as complete, set phase to complete
-  if (data.isComplete) {
-    progressStore[sessionId].phase = 'complete';
-  }
-  
-  // Clean up old sessions (keep for 10 minutes)
-  const now = Date.now();
-  Object.keys(progressStore).forEach(id => {
-    const session = progressStore[id];
-    if (session.isComplete && now - new Date(session.logs[session.logs.length - 1]?.timestamp || 0).getTime() > 10 * 60 * 1000) {
-      delete progressStore[id];
-    }
-  });
-}
-
-// Initialize a new session
-export function initSession(sessionId: string) {
-  if (!progressStore[sessionId]) {
-    progressStore[sessionId] = {
-      percentage: 0,
-      currentMailbox: '',
-      processedMessages: 0,
-      totalMessages: 0,
-      processedMailboxes: 0,
-      totalMailboxes: 0,
-      logs: [{
-        message: 'Initializing sync session',
-        timestamp: new Date().toISOString()
-      }],
-      isComplete: false,
-      sessionId,
-      phase: 'start'
-    };
-  }
-  
-  return progressStore[sessionId];
-}
-
-// SSE endpoint for real-time progress updates
-// Type definitions for configuration
+// Types for config and sync options
 interface ImapConfig {
   host: string;
   port: number;
   secure: boolean;
   username: string;
   password: string;
+  tls?: boolean;
 }
 
 interface SyncOptions {
@@ -105,47 +25,51 @@ interface SyncOptions {
   maxMessages?: number;
 }
 
-// Create a function to dynamically import the sync process module to avoid TypeScript errors
-// This works at runtime even though TypeScript can't find the module during static analysis
-const importSyncProcess = async () => {
+// Type for the performSync function that will be dynamically imported
+type PerformSyncFunction = (
+  sessionId: string,
+  sourceConfig: ImapConfig,
+  destinationConfig: ImapConfig,
+  syncOptions?: SyncOptions
+) => Promise<void>;
+
+// Initialize a new session - used internally only
+function initSession(sessionId: string) {
+  updateProgress(sessionId, {
+    percentage: 0,
+    currentMailbox: '',
+    processedMessages: 0,
+    totalMessages: 0,
+    processedMailboxes: 0,
+    totalMailboxes: 0,
+    logs: [{
+      message: 'Initializing sync session',
+      timestamp: new Date().toISOString()
+    }],
+    isComplete: false,
+    sessionId,
+    phase: 'start'
+  });
+  
+  return getProgress(sessionId);
+}
+
+// Function to dynamically import the sync process module
+const importSyncProcess = async (): Promise<PerformSyncFunction> => {
   try {
-    // Using dynamic import to avoid TypeScript static analysis errors
-    const syncModule = await import('../sync/sync-process');
-    return syncModule.performSync;
+    const syncModulePath = '../sync/sync-process';
+    // Using dynamic import with explicit path
+    const syncModule = await import(syncModulePath);
+    // Return the performSync function from the module
+    if (typeof syncModule.performSync === 'function') {
+      return syncModule.performSync as PerformSyncFunction;
+    }
+    throw new Error('performSync function not found in module');
   } catch (error) {
     console.error('Error importing sync process module:', error);
     throw new Error('Failed to load sync module');
   }
 };
-
-// Function to start the actual sync process
-async function startSyncProcess(
-  sessionId: string, 
-  sourceConfig: ImapConfig, 
-  destinationConfig: ImapConfig, 
-  syncOptions?: SyncOptions
-) {
-  try {
-    console.log(`Starting sync process for session ${sessionId}`);
-    
-    // Start the sync process directly without making an HTTP request
-    // This avoids the issues with server-side fetch in Next.js API routes
-    // The process will run asynchronously
-    performSync(sessionId, sourceConfig, destinationConfig, syncOptions);
-    
-    return { success: true, message: 'Sync process started' };
-  } catch (error) {
-    console.error(`Error starting sync process:`, error);
-    updateProgress(sessionId, {
-      logs: [{
-        message: `Error starting sync: ${error instanceof Error ? error.message : String(error)}`,
-        timestamp: new Date().toISOString()
-      }],
-      isComplete: true
-    });
-    return { error: `Failed to start sync process: ${error instanceof Error ? error.message : String(error)}` };
-  }
-}
 
 // SSE endpoint for real-time progress updates
 export async function GET(request: NextRequest) {
@@ -168,7 +92,7 @@ export async function GET(request: NextRequest) {
   }
   
   // Check if session exists
-  if (!progressStore[sessionId]) {
+  if (!getProgress(sessionId)) {
     // Initialize session if it doesn't exist
     initSession(sessionId);
   }
@@ -185,7 +109,7 @@ export async function GET(request: NextRequest) {
       };
       
       // Send initial data
-      const initialData = progressStore[sessionId];
+      const initialData = getProgress(sessionId);
       console.log('Sending initial SSE data:', initialData);
       send(initialData);
       
@@ -214,7 +138,11 @@ export async function GET(request: NextRequest) {
                   // Dynamically import the sync process module
                   const performSyncFn = await importSyncProcess();
                   // Call the imported function with the config
-                  await performSyncFn(sessionId, sourceConfig, destinationConfig, syncOptions);
+                  if (performSyncFn) {
+                    await performSyncFn(sessionId, sourceConfig, destinationConfig, syncOptions);
+                  } else {
+                    throw new Error('Failed to load sync function');
+                  }
                 } catch (err) {
                   console.error('Error in sync process:', err);
                   send({ error: `Error in sync: ${err instanceof Error ? err.message : String(err)}` });
@@ -231,34 +159,37 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      // Set up interval to send progress updates
-      const intervalId = setInterval(() => {
-        if (!progressStore[sessionId]) {
-          clearInterval(intervalId);
-          send({ error: "Session expired" });
-          controller.close();
-          return;
-        }
-        
-        const currentData = progressStore[sessionId];
-        console.log('Sending SSE update:', { 
-          percentage: currentData.percentage,
-          currentMailbox: currentData.currentMailbox,
-          phase: currentData.phase
-        });
-        send(currentData);
-        
-        // If sync is complete, end the stream
-        if (currentData.isComplete) {
-          console.log('Sync complete, closing SSE stream');
-          clearInterval(intervalId);
-          controller.close();
+      // Clear or create an interval to send progress updates
+      const intervalRef = setInterval(() => {
+        try {
+          if (request.signal.aborted) {
+            clearInterval(intervalRef);
+            console.log(`Client disconnected, clearing interval for session ${sessionId}`);
+            return;
+          }
+
+          // Get the progress for this session
+          const progress = getProgress(sessionId);
+
+          // If progress exists, send it
+          if (progress) {
+            console.log(`Sending progress update for session ${sessionId}:`, {
+              percentage: progress.percentage,
+              currentMailbox: progress.currentMailbox,
+              isComplete: progress.isComplete,
+            });
+            send(progress);
+          } else {
+            console.log(`No progress data found for session ${sessionId}`);
+          }
+        } catch (error) {
+          console.error('Error sending progress update:', error);
         }
       }, 1000); // Send updates every second
       
       // Clean up interval if the connection is closed
       request.signal.addEventListener('abort', () => {
-        clearInterval(intervalId);
+        clearInterval(intervalRef);
       });
     }
   });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { initSession } from "../sse/route";
+import { updateProgress } from "../shared/progress-store";
 import { performSync } from "./sync-process";
 
 export async function POST(request: Request) {
@@ -18,10 +18,22 @@ export async function POST(request: Request) {
     // Use provided sessionId or generate a new one
     const sessionId = providedSessionId || `sync-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
     
-    // Initialize the session in the SSE store if it doesn't exist yet
-    if (!providedSessionId) {
-      initSession(sessionId);
-    }
+    // Initialize the session in the progress store
+    updateProgress(sessionId, {
+      percentage: 0,
+      currentMailbox: '',
+      processedMessages: 0,
+      totalMessages: 0,
+      processedMailboxes: 0,
+      totalMailboxes: 0,
+      logs: [{
+        message: 'Initializing sync session',
+        timestamp: new Date().toISOString()
+      }],
+      isComplete: false,
+      sessionId,
+      phase: 'start'
+    });
 
     // If this was called directly (not via SSE), start the sync process
     if (!providedSessionId) {
