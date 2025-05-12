@@ -38,8 +38,10 @@ const isServerless = process.env.VERCEL === '1';
 
 // Helper to determine if Vercel KV is available
 const isKvAvailable = (): boolean => {
-  return isServerless && typeof kv !== 'undefined';
-};
+   const vars = ['KV_REDIS_KV_URL', 'KV_REST_API_URL', 'KV_REST_API_TOKEN'];
+   const hasCreds = vars.every((v) => !!process.env[v]);
+   return isServerless && typeof kv !== 'undefined' && hasCreds;
+  };
 
 // Function to update progress for a specific session
 export async function updateProgress(sessionId: string, data: Partial<ProgressData>): Promise<ProgressData> {
@@ -96,7 +98,12 @@ export async function updateProgress(sessionId: string, data: Partial<ProgressDa
   // Store the updated progress
   if (isKvAvailable()) {
     // Store in Vercel KV with TTL
-    await kv.set(key, updatedProgress, { ex: PROGRESS_TTL });
+    try {
+      await kv.set(key, updatedProgress, { ex: PROGRESS_TTL });
+    } catch (err) {
+      console.error('KV write failed, falling back to memory store', err);
+      localProgressStore[sessionId] = updatedProgress;
+    }
   } else {
     // Store in local memory
     localProgressStore[sessionId] = updatedProgress;
