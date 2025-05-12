@@ -18,7 +18,10 @@ export function ConnectionLog({ logs, mailboxes }: ConnectionLogProps) {
   useEffect(() => {
     // Auto-scroll to bottom when new logs are added
     if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+      logContainerRef.current.scrollTo({
+        top: logContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
     }
   }, [logs]);
 
