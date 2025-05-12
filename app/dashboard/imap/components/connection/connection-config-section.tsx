@@ -25,6 +25,8 @@ const isConfigValid = (config: ImapConnectionConfig | null): config is ImapConne
   return config !== null;
 };
 
+const isDev = process.env.NODE_ENV === "development";
+
 export function ConnectionConfigSection({
   title,
   config,
@@ -44,6 +46,9 @@ export function ConnectionConfigSection({
     secure: config?.secure ?? true,
     tls: config?.tls ?? false,
   });
+
+  const [emptying, setEmptying] = useState(false);
+  const [emptyResult, setEmptyResult] = useState<string | null>(null);
 
   const addLog = (type: 'info' | 'error' | 'success', message: string) => {
     setLogs(prev => [
@@ -85,6 +90,35 @@ export function ConnectionConfigSection({
       setConnectionTestState('failed');
     }
   };
+
+  const handleEmptyMailbox = async () => {
+    if (!config || !mailboxes.length) return;
+    setEmptying(true);
+    setEmptyResult(null);
+    try {
+      // For demo, just use the first mailbox
+      const mailbox = mailboxes[0].name;
+      const response = await fetch("/api/imap/empty-mailbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config, mailbox }),
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setEmptyResult(result.message);
+        addLog("success", result.message);
+      } else {
+        setEmptyResult(result.error || "Failed to empty mailbox");
+        addLog("error", result.error || "Failed to empty mailbox");
+      }
+    } catch (error: any) {
+      setEmptyResult(error.message || "Failed to empty mailbox");
+      addLog("error", error.message || "Failed to empty mailbox");
+    } finally {
+      setEmptying(false);
+    }
+  };
+
   return (
     <Card>
        <CardHeader className="flex flex-row items-center justify-between">
@@ -112,6 +146,16 @@ export function ConnectionConfigSection({
             )}
             Test Connection
           </Button>
+          {isDev && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleEmptyMailbox}
+              disabled={disabled || !config || emptying}
+            >
+              {emptying ? "Emptying..." : "Empty Mailbox"}
+            </Button>
+          )}
             <Button
               variant="ghost"
               size="sm"
@@ -159,6 +203,9 @@ export function ConnectionConfigSection({
             mailboxes={mailboxes}
             onLog={addLog}
           />
+        )}
+        {emptyResult && (
+          <div className="mt-2 text-xs text-gray-600">{emptyResult}</div>
         )}
       </CardContent>
     </Card>
