@@ -54,21 +54,12 @@ async function initSession(sessionId: string): Promise<ProgressData | null> {
   return await getProgress(sessionId);
 }
 
-// Function to dynamically import the sync process module
+// Import the sync process module directly
+import { performSync } from '../sync/sync-process';
+
+// Function to get the performSync function
 const importSyncProcess = async (): Promise<PerformSyncFunction> => {
-  try {
-    const syncModulePath = '../sync/sync-process';
-    // Using dynamic import with explicit path
-    const syncModule = await import(syncModulePath);
-    // Return the performSync function from the module
-    if (typeof syncModule.performSync === 'function') {
-      return syncModule.performSync as PerformSyncFunction;
-    }
-    throw new Error('performSync function not found in module');
-  } catch (error) {
-    console.error('Error importing sync process module:', error);
-    throw new Error('Failed to load sync module');
-  }
+  return performSync;
 };
 
 // SSE endpoint for real-time progress updates

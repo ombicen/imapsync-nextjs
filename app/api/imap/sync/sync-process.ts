@@ -54,12 +54,7 @@ interface SyncOptions {
 /**
  * Perform the synchronization process between two IMAP servers
  */
-export async function performSync(
-  sessionId: string,
-  sourceConfig: ImapConfig,
-  destinationConfig: ImapConfig,
-  syncOptions?: SyncOptions
-) {
+export async function performSync(sessionId: string, sourceConfig: ImapConfig, destinationConfig: ImapConfig, syncOptions?: SyncOptions): Promise<void> {
   const startTime = new Date();
   let sourceClient: ExtendedImapFlow | null = null;
   let destinationClient: ExtendedImapFlow | null = null;
