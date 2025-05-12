@@ -1,24 +1,20 @@
-import { useState, useEffect } from 'react';
-import { 
-  ImapConnectionConfig, 
-  ImapSyncOptions,
-  ImapSyncProgress,
-  ImapSyncResults,
-  ImapSyncStats,
-  ImapSyncState
-} from "@/lib/types/imap";
+import { useState, useEffect } from "react";
 import {
-  connectToImap,
-  getMailboxList,
-  syncMailbox,
-} from "@/lib/imap/imap-utils";
+  ImapConnectionConfig,
+  ImapSyncProgress,
+  ImapSyncStats,
+} from "@/lib/types/imap";
+import { connectToImap, getMailboxList } from "@/lib/imap/imap-utils";
 
-const getEstimatedTimeRemaining = (current: number, total: number): string | null => {
+const getEstimatedTimeRemaining = (
+  current: number,
+  total: number
+): string | null => {
   if (total === 0 || current === 0) return null;
-  
+
   const remaining = total - current;
   const estimatedSeconds = remaining * 0.4; // Adjust this multiplier based on actual performance
-  
+
   if (estimatedSeconds > 60) {
     return `about ${Math.ceil(estimatedSeconds / 60)} minutes`;
   } else {
@@ -27,7 +23,16 @@ const getEstimatedTimeRemaining = (current: number, total: number): string | nul
 };
 
 interface ImapSyncStatus {
-  syncState: 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'waiting' | 'connecting' | 'copying' | 'finalizing';
+  syncState:
+    | "idle"
+    | "running"
+    | "paused"
+    | "completed"
+    | "failed"
+    | "waiting"
+    | "connecting"
+    | "copying"
+    | "finalizing";
   progress: ImapSyncProgress;
   stats: ImapSyncStats;
 }
@@ -51,61 +56,67 @@ export interface UseImapSyncProps {
   }) => void;
 }
 
-export default function useImapSync({ syncOptions, onSyncComplete }: UseImapSyncProps) {
+export default function useImapSync({
+  syncOptions,
+  onSyncComplete,
+}: UseImapSyncProps) {
   const [status, setStatus] = useState<ImapSyncStatus | null>(null);
   const [state, setState] = useState<ImapSyncStatus>({
-    syncState: 'idle',
+    syncState: "idle",
     progress: {
       total: 0,
       current: 0,
       percentage: 0,
       estimatedTimeRemaining: null,
-      status: 'idle',
+      status: "idle",
     },
     stats: {
       total: 0,
       copied: 0,
       skipped: 0,
-      errors: []
+      errors: [],
     },
   });
 
-  const handleStartSync = async (sourceConfig: ImapConnectionConfig, destinationConfig: ImapConnectionConfig) => {
+  const handleStartSync = async (
+    sourceConfig: ImapConnectionConfig,
+    destinationConfig: ImapConnectionConfig
+  ) => {
     if (!sourceConfig || !destinationConfig) {
-      console.error('Missing configuration');
+      console.error("Missing configuration");
       return;
     }
 
     try {
-      setState(prev => ({ ...prev, syncState: 'running' }));
+      setState((prev) => ({ ...prev, syncState: "running" }));
       // The actual sync is now handled by the API route
     } catch (error) {
-      console.error('IMAP sync error:', error);
-      setState(prev => ({ ...prev, syncState: 'failed' }));
+      console.error("IMAP sync error:", error);
+      setState((prev) => ({ ...prev, syncState: "failed" }));
     }
   };
 
   const handlePauseSync = () => {
-    setState(prev => ({ ...prev, syncState: 'paused' }));
+    setState((prev) => ({ ...prev, syncState: "paused" }));
   };
 
   const handleResumeSync = () => {
-    setState(prev => ({ ...prev, syncState: 'running' }));
+    setState((prev) => ({ ...prev, syncState: "running" }));
   };
 
   const handleStopSync = () => {
-    setState(prev => ({ ...prev, syncState: 'idle' }));
+    setState((prev) => ({ ...prev, syncState: "idle" }));
   };
 
   const handleReset = () => {
     setState({
-      syncState: 'idle',
+      syncState: "idle",
       progress: {
         total: 0,
         current: 0,
         percentage: 0,
         estimatedTimeRemaining: null,
-        status: 'idle',
+        status: "idle",
       },
       stats: {
         total: 0,
@@ -117,19 +128,22 @@ export default function useImapSync({ syncOptions, onSyncComplete }: UseImapSync
   };
 
   const handleProgressUpdate = (progress: ImapSyncProgress) => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       progress: {
         ...progress,
         percentage: Math.round((progress.current / progress.total) * 100),
-        estimatedTimeRemaining: getEstimatedTimeRemaining(progress.current, progress.total),
+        estimatedTimeRemaining: getEstimatedTimeRemaining(
+          progress.current,
+          progress.total
+        ),
       },
       stats: {
         ...prev.stats,
         total: progress.total,
         copied: progress.current,
         skipped: 0,
-        errors: []
+        errors: [],
       },
     }));
   };

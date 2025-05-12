@@ -139,12 +139,8 @@ export function ImapSyncContainer({
         // Update stats
         if (data.processedMessages !== undefined) {
           setSyncStats((prev) => ({
-            processedMessages: data.processedMessages || 0,
-            totalMessages: data.totalMessages || 0,
-            processedMailboxes: data.processedMailboxes || 0,
-            totalMailboxes: data.totalMailboxes || 0,
-            errors: prev?.errors || 0,
-            currentMailbox: data.currentMailbox,
+            ...prev,
+            ...data,
           }));
         }
 

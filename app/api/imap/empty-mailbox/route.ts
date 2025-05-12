@@ -6,9 +6,10 @@ export async function POST(request: NextRequest) {
   if (!config) {
     return NextResponse.json({ error: "Missing config" }, { status: 400 });
   }
+  let client;
   try {
     const { connectToImap } = await import("@/lib/imap/imap-utils");
-    const client = await connectToImap(config);
+    client = await connectToImap(config);
     const mailboxes = await getMailboxList(client);
     let emptied = [];
     for (const mailbox of mailboxes) {
@@ -19,7 +20,6 @@ export async function POST(request: NextRequest) {
         // Optionally log or collect errors per mailbox
       }
     }
-    await client.logout();
     return NextResponse.json({
       message: `Emptied mailboxes: ${emptied.join(", ")}`,
       emptied,
@@ -29,5 +29,9 @@ export async function POST(request: NextRequest) {
       { error: error.message || "Failed to empty mailboxes" },
       { status: 500 }
     );
+  } finally {
+    if (client) {
+      await client.logout();
+    }
   }
 }

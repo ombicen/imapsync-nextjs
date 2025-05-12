@@ -176,6 +176,7 @@ export async function performSync(
 
     // Process mailboxes (limit to 5 for performance)
     const maxMailboxes = Math.min(5, mailboxes.length);
+    stats.totalMailboxes = maxMailboxes; // Fix: only count mailboxes actually processed
 
     // Use batchSize from syncOptions, fallback to 10 if not set
     const batchSize =
@@ -184,6 +185,8 @@ export async function performSync(
         : 10;
     const maxRetries = syncOptions?.maxRetries ?? 0;
     const retryDelay = syncOptions?.retryDelay ?? 0;
+    const progressUpdateInterval = Math.max(10, batchSize); // Only update every N messages
+    let lastProgressUpdate = 0;
 
     for (let i = 0; i < maxMailboxes; i++) {
       // Check for stop signal before processing each mailbox
@@ -390,22 +393,6 @@ export async function performSync(
                   );
                 }
 
-                // Update progress with detailed message and fresh timestamp
-                await updateProgress(sessionId, {
-                  processedMessages: totalProcessedMessages,
-                  totalMessages: stats.totalEmails,
-                  percentage: percentage,
-                  logs: [
-                    {
-                      message: `Processing messages: ${totalProcessedMessages}/${stats.totalEmails} (mailbox: ${mailboxName})`,
-                      timestamp: new Date().toISOString(), // Fresh timestamp for each update
-                    },
-                  ],
-                });
-                console.log(
-                  `Message progress update: processedMessages=${totalProcessedMessages}, totalMessages=${stats.totalEmails}, percentage=${percentage}`
-                );
-
                 let attempt = 0;
                 let success = false;
                 while (attempt <= maxRetries && !success) {
@@ -534,6 +521,31 @@ export async function performSync(
                       }
                     }
                   }
+                }
+                // Throttle progress updates: only update every progressUpdateInterval messages
+                if (
+                  totalProcessedMessages - lastProgressUpdate >=
+                    progressUpdateInterval ||
+                  totalProcessedMessages === stats.totalEmails
+                ) {
+                  lastProgressUpdate = totalProcessedMessages;
+                  await updateProgress(sessionId, {
+                    processedMessages: totalProcessedMessages,
+                    totalMessages: stats.totalEmails,
+                    percentage: Math.min(
+                      95,
+                      5 +
+                        Math.floor(
+                          (totalProcessedMessages / stats.totalEmails) * 90
+                        )
+                    ),
+                    logs: [
+                      {
+                        message: `Processing messages: ${totalProcessedMessages}/${stats.totalEmails} (mailbox: ${mailboxName})`,
+                        timestamp: new Date().toISOString(),
+                      },
+                    ],
+                  });
                 }
               }
             }
