@@ -20,7 +20,7 @@ This application is fully compatible with serverless environments like Vercel. I
 
 ## Security
 
-The application runs entirely on the client side, connecting directly to your IMAP servers. No data is stored on any server.
+The application runs mostly on the client side, connecting directly to your IMAP servers. No data is stored on any server.
 
 ## Tech Stack
 
