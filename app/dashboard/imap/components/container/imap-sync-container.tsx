@@ -10,6 +10,14 @@ import {
 import { ConnectionConfigSection } from "../connection/connection-config-section";
 import { SyncOptionsSection } from "../config/sync-options-section";
 import { SyncStatusSection } from "../sync/sync-status-section";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 interface ImapSyncContainerProps {
   sourceConfig: NullableImapConnectionConfig;
@@ -63,6 +71,8 @@ export function ImapSyncContainer({
     endTime: string;
     elapsedTimeSeconds: number;
   } | null>(null);
+
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
 
   // Reference to the AbortController for fetch requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -203,19 +213,29 @@ export function ImapSyncContainer({
     };
   }, []);
 
+  // Show error dialog when syncError is set
+  useEffect(() => {
+    if (syncError) setShowErrorDialog(true);
+  }, [syncError]);
+
   const handleStartSync = async () => {
     console.log("Start sync button clicked");
 
     if (!initialSourceConfig || !initialDestinationConfig) {
-      console.error("Source or destination config missing");
+      // Reset dialog before setting error to force re-open
+      setShowErrorDialog(false);
+      setTimeout(() => {
+        setSyncError(`Source or destination config missing (${Date.now()})`); // Unique string each time
+      }, 0);
       return;
     }
 
     // Reset UI state for a new sync
+    setSyncError(null); // Always clear error before starting
+    setShowErrorDialog(false);
     setSyncProgress(0);
     setSyncStats(null);
     setSyncLogs([]);
-    setSyncError(null);
     setSyncComplete(false);
     setSyncSummary(null);
 
@@ -242,7 +262,10 @@ export function ImapSyncContainer({
       console.log("SSE session creation response:", data);
 
       if (data.error) {
-        setSyncError(data.error);
+        setShowErrorDialog(false);
+        setTimeout(() => {
+          setSyncError(`${data.error} (${Date.now()})`); // Unique string
+        }, 0);
         return;
       }
 
@@ -251,11 +274,19 @@ export function ImapSyncContainer({
         sessionIdRef.current = data.sessionId;
         setIsSyncing(true); // This will trigger the useEffect to establish the SSE connection
       } else {
-        setSyncError("No session ID received from server");
+        setShowErrorDialog(false);
+        setTimeout(() => {
+          setSyncError(`No session ID received from server (${Date.now()})`); // Unique string
+        }, 0);
       }
     } catch (error: any) {
       console.error("Error starting sync:", error);
-      setSyncError(error.message || "Failed to start sync process");
+      setShowErrorDialog(false);
+      setTimeout(() => {
+        setSyncError(
+          `${error.message || "Failed to start sync process"} (${Date.now()})`
+        );
+      }, 0);
     }
   };
 
@@ -313,51 +344,68 @@ export function ImapSyncContainer({
   };
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-8">
-          <div>
-            <ConnectionConfigSection
-              title="Source Server"
-              config={initialSourceConfig}
-              showForm={showSourceForm}
-              onToggleForm={() => setShowSourceForm(!showSourceForm)}
-              onSubmit={onSourceConfigChange}
-            />
+    <>
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sync Error</AlertDialogTitle>
+            <AlertDialogDescription>
+              {syncError || "An unknown error occurred while starting sync."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogAction onClick={() => setShowErrorDialog(false)}>
+            OK
+          </AlertDialogAction>
+        </AlertDialogContent>
+      </AlertDialog>
+      <div className="space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-8">
+            <div>
+              <ConnectionConfigSection
+                title="Source Server"
+                config={initialSourceConfig}
+                showForm={showSourceForm}
+                onToggleForm={() => setShowSourceForm(!showSourceForm)}
+                onSubmit={onSourceConfigChange}
+              />
+            </div>
+            <div>
+              <SyncOptionsSection
+                syncOptions={syncOptions}
+                onOptionsChange={setSyncOptions}
+              />
+            </div>
           </div>
-          <div>
-            <SyncOptionsSection
-              syncOptions={syncOptions}
-              onOptionsChange={setSyncOptions}
-            />
-          </div>
-        </div>
-        <div className="space-y-8">
-          <div>
-            <ConnectionConfigSection
-              title="Destination Server"
-              config={initialDestinationConfig}
-              showForm={showDestinationForm}
-              onToggleForm={() => setShowDestinationForm(!showDestinationForm)}
-              onSubmit={onDestinationConfigChange}
-            />
-          </div>
-          <div>
-            <SyncStatusSection
-              isSyncing={isSyncing}
-              syncProgress={syncProgress}
-              syncStats={syncStats}
-              syncLogs={syncLogs}
-              syncError={syncError}
-              syncComplete={syncComplete}
-              syncSummary={syncSummary}
-              onSyncStart={handleStartSync}
-              onSyncStop={handleStopSync}
-              onReset={handleReset}
-            />
+          <div className="space-y-8">
+            <div>
+              <ConnectionConfigSection
+                title="Destination Server"
+                config={initialDestinationConfig}
+                showForm={showDestinationForm}
+                onToggleForm={() =>
+                  setShowDestinationForm(!showDestinationForm)
+                }
+                onSubmit={onDestinationConfigChange}
+              />
+            </div>
+            <div>
+              <SyncStatusSection
+                isSyncing={isSyncing}
+                syncProgress={syncProgress}
+                syncStats={syncStats}
+                syncLogs={syncLogs}
+                syncError={syncError}
+                syncComplete={syncComplete}
+                syncSummary={syncSummary}
+                onSyncStart={handleStartSync}
+                onSyncStop={handleStopSync}
+                onReset={handleReset}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

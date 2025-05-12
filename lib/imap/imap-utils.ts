@@ -6,13 +6,14 @@ export async function emptyMailbox(
   client: any,
   mailbox: string
 ): Promise<void> {
-  await client.mailboxOpen(mailbox);
-  const messages = await client.search({ all: true });
-  if (messages.length > 0) {
-    await client.messageDelete(messages);
-    await client.expunge();
+  try {
+    await client.mailboxDelete(mailbox);
+  } catch (err) {
+    // Ignore error if mailbox does not exist or cannot be deleted
   }
+  await client.mailboxCreate(mailbox);
 }
+
 export async function connectToImap(
   config: ImapConnectionConfig
 ): Promise<ImapFlow> {

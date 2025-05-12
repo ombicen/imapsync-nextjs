@@ -49,6 +49,9 @@ interface SyncOptions {
     folders?: string[];
   };
   maxMessages?: number;
+  batchSize?: number;
+  maxRetries?: number;
+  retryDelay?: number;
 }
 
 /**
@@ -174,6 +177,14 @@ export async function performSync(
     // Process mailboxes (limit to 5 for performance)
     const maxMailboxes = Math.min(5, mailboxes.length);
 
+    // Use batchSize from syncOptions, fallback to 10 if not set
+    const batchSize =
+      syncOptions?.batchSize && syncOptions.batchSize > 0
+        ? syncOptions.batchSize
+        : 10;
+    const maxRetries = syncOptions?.maxRetries ?? 0;
+    const retryDelay = syncOptions?.retryDelay ?? 0;
+
     for (let i = 0; i < maxMailboxes; i++) {
       // Check for stop signal before processing each mailbox
       const progress = await getProgress(sessionId);
@@ -253,8 +264,8 @@ export async function performSync(
           });
           console.log(`Updated totalMessages: ${stats.totalEmails}`);
 
-          // Limit to 10 messages per mailbox for performance
-          const maxMessages = Math.min(10, status.messages);
+          // Use batchSize for message processing
+          const maxMessages = Math.min(batchSize, status.messages);
 
           if (maxMessages > 0) {
             // Get message sequence numbers (most recent first)
@@ -329,176 +340,201 @@ export async function performSync(
               continue;
             }
 
-            // Process messages
-            for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
-              // Check for stop signal before processing each message
-              const progress = await getProgress(sessionId);
-              if (progress?.shouldStop) {
+            // Process messages in batches
+            for (
+              let batchStart = 0;
+              batchStart < messages.length;
+              batchStart += batchSize
+            ) {
+              const batch = messages.slice(batchStart, batchStart + batchSize);
+              for (let msgIndex = 0; msgIndex < batch.length; msgIndex++) {
+                // Check for stop signal before processing each message
+                const progress = await getProgress(sessionId);
+                if (progress?.shouldStop) {
+                  await updateProgress(sessionId, {
+                    logs: [
+                      {
+                        message: "Sync stopped by user",
+                        timestamp: new Date().toISOString(),
+                      },
+                    ],
+                    isComplete: true,
+                  });
+                  console.log("Sync stopped by user");
+                  break;
+                }
+                const message = batch[msgIndex];
+
+                // Update message progress
+                const totalProcessedMessages =
+                  stats.syncedEmails + stats.skippedEmails;
+
+                // Calculate percentage based solely on processed messages / total messages
+                // Reserve 5% for initial connection and 5% for final completion
+                let percentage = 5; // Start with 5% base
+
+                if (stats.totalEmails > 0) {
+                  // Only calculate message progress if we have messages
+                  const messageProgress = Math.min(
+                    90,
+                    Math.floor(
+                      (totalProcessedMessages / stats.totalEmails) * 90
+                    )
+                  );
+                  percentage += messageProgress; // 5% base + message progress (up to 90%) = max 95%
+                } else {
+                  // If no messages, base progress on mailbox count
+                  percentage = Math.min(
+                    95,
+                    5 + Math.floor(((i + 1) / maxMailboxes) * 90)
+                  );
+                }
+
+                // Update progress with detailed message and fresh timestamp
                 await updateProgress(sessionId, {
+                  processedMessages: totalProcessedMessages,
+                  totalMessages: stats.totalEmails,
+                  percentage: percentage,
                   logs: [
                     {
-                      message: "Sync stopped by user",
-                      timestamp: new Date().toISOString(),
+                      message: `Processing messages: ${totalProcessedMessages}/${stats.totalEmails} (mailbox: ${mailboxName})`,
+                      timestamp: new Date().toISOString(), // Fresh timestamp for each update
                     },
                   ],
-                  isComplete: true,
-                });
-                console.log("Sync stopped by user");
-                break;
-              }
-              const message = messages[msgIndex];
-
-              // Update message progress
-              const totalProcessedMessages =
-                stats.syncedEmails + stats.skippedEmails;
-
-              // Calculate percentage based solely on processed messages / total messages
-              // Reserve 5% for initial connection and 5% for final completion
-              let percentage = 5; // Start with 5% base
-
-              if (stats.totalEmails > 0) {
-                // Only calculate message progress if we have messages
-                const messageProgress = Math.min(
-                  90,
-                  Math.floor((totalProcessedMessages / stats.totalEmails) * 90)
-                );
-                percentage += messageProgress; // 5% base + message progress (up to 90%) = max 95%
-              } else {
-                // If no messages, base progress on mailbox count
-                percentage = Math.min(
-                  95,
-                  5 + Math.floor(((i + 1) / maxMailboxes) * 90)
-                );
-              }
-
-              // Update progress with detailed message and fresh timestamp
-              await updateProgress(sessionId, {
-                processedMessages: totalProcessedMessages,
-                totalMessages: stats.totalEmails,
-                percentage: percentage,
-                logs: [
-                  {
-                    message: `Processing messages: ${totalProcessedMessages}/${stats.totalEmails} (mailbox: ${mailboxName})`,
-                    timestamp: new Date().toISOString(), // Fresh timestamp for each update
-                  },
-                ],
-              });
-              console.log(
-                `Message progress update: processedMessages=${totalProcessedMessages}, totalMessages=${stats.totalEmails}, percentage=${percentage}`
-              );
-
-              // Fetch message size
-              const idForError = message.seq || message.uid;
-              try {
-                const sizeCheck = await sourceClient.fetchOne(idForError, {
-                  envelope: true,
-                  size: true,
                 });
                 console.log(
-                  `Fetched message size for ${idForError}: ${
-                    sizeCheck?.size || 0
-                  } bytes`
+                  `Message progress update: processedMessages=${totalProcessedMessages}, totalMessages=${stats.totalEmails}, percentage=${percentage}`
                 );
 
-                if (sizeCheck && sizeCheck.size) {
-                  if (sizeCheck.size > 25 * 1024 * 1024) {
-                    // 25MB limit
-                    throw new Error(
-                      `Message too large (${Math.round(
-                        sizeCheck.size / 1024 / 1024
-                      )}MB)`
-                    );
-                  }
-
-                  // Fetch the full message with different options
-                  const messageData = message.uid
-                    ? await sourceClient.fetchOne(message.uid, {
-                        source: true,
-                        bodyStructure: true,
-                      })
-                    : await sourceClient.fetchOne(message.seq, {
-                        source: true,
-                        bodyStructure: true,
-                      });
-
-                  if (messageData && messageData.source) {
+                let attempt = 0;
+                let success = false;
+                while (attempt <= maxRetries && !success) {
+                  try {
+                    // Fetch message size
+                    const idForError = message.seq || message.uid;
+                    const sizeCheck = await sourceClient.fetchOne(idForError, {
+                      envelope: true,
+                      size: true,
+                    });
                     console.log(
-                      `Successfully fetched message source (${messageData.source.length} bytes)`
+                      `Fetched message size for ${idForError}: ${
+                        sizeCheck?.size || 0
+                      } bytes`
                     );
 
-                    // Append message to destination
-                    await destinationClient.append(
-                      mailboxName,
-                      messageData.source
-                    );
-                    mailboxStats.syncedMessages++;
-                    stats.syncedEmails++;
+                    if (sizeCheck && sizeCheck.size) {
+                      if (sizeCheck.size > 25 * 1024 * 1024) {
+                        // 25MB limit
+                        throw new Error(
+                          `Message too large (${Math.round(
+                            sizeCheck.size / 1024 / 1024
+                          )}MB)`
+                        );
+                      }
 
-                    // Add periodic progress updates for successful transfers (every 5 messages)
-                    if (stats.syncedEmails % 5 === 0) {
+                      // Fetch the full message with different options
+                      const messageData = message.uid
+                        ? await sourceClient.fetchOne(message.uid, {
+                            source: true,
+                            bodyStructure: true,
+                          })
+                        : await sourceClient.fetchOne(message.seq, {
+                            source: true,
+                            bodyStructure: true,
+                          });
+
+                      if (messageData && messageData.source) {
+                        console.log(
+                          `Successfully fetched message source (${messageData.source.length} bytes)`
+                        );
+
+                        // Append message to destination
+                        await destinationClient.append(
+                          mailboxName,
+                          messageData.source
+                        );
+                        mailboxStats.syncedMessages++;
+                        stats.syncedEmails++;
+                        success = true;
+
+                        // Add periodic progress updates for successful transfers (every 5 messages)
+                        if (stats.syncedEmails % 5 === 0) {
+                          const totalProcessed =
+                            stats.syncedEmails + stats.skippedEmails;
+                          await updateProgress(sessionId, {
+                            processedMessages: totalProcessed,
+                            percentage: Math.min(
+                              95,
+                              5 +
+                                Math.floor(
+                                  (totalProcessed / stats.totalEmails) * 90
+                                )
+                            ),
+                            logs: [
+                              {
+                                message: `Successfully synced ${stats.syncedEmails} messages. Progress: ${totalProcessed}/${stats.totalEmails}`,
+                                timestamp: new Date().toISOString(), // Fresh timestamp
+                              },
+                            ],
+                          });
+                        }
+
+                        console.log(
+                          `Successfully appended message to destination`
+                        );
+                      } else {
+                        console.error(
+                          "Message data received but source is missing",
+                          messageData
+                        );
+                        throw new Error(
+                          "Message source not available in fetch result"
+                        );
+                      }
+                    } else {
+                      // Handle zero size gracefully
+                      console.warn(
+                        `Message size is zero for message ${idForError}, skipping.`
+                      );
+                      mailboxStats.skippedMessages++;
+                      stats.skippedEmails++;
+
                       const totalProcessed =
                         stats.syncedEmails + stats.skippedEmails;
                       await updateProgress(sessionId, {
                         processedMessages: totalProcessed,
                         percentage: Math.min(
                           95,
-                          5 +
-                            Math.floor(
-                              (totalProcessed / stats.totalEmails) * 90
-                            )
+                          5 + Math.floor(((i + 1) / maxMailboxes) * 90)
                         ),
                         logs: [
                           {
-                            message: `Successfully synced ${stats.syncedEmails} messages. Progress: ${totalProcessed}/${stats.totalEmails}`,
+                            message: `Skipped message with zero size. Progress: ${totalProcessed}/${stats.totalEmails} in ${mailboxName}`,
                             timestamp: new Date().toISOString(), // Fresh timestamp
                           },
                         ],
                       });
                     }
-
-                    console.log(`Successfully appended message to destination`);
-                  } else {
-                    console.error(
-                      "Message data received but source is missing",
-                      messageData
-                    );
-                    throw new Error(
-                      "Message source not available in fetch result"
-                    );
+                  } catch (error: any) {
+                    attempt++;
+                    if (attempt > maxRetries) {
+                      mailboxStats.skippedMessages++;
+                      stats.skippedEmails++;
+                      stats.errors.push(
+                        `Error syncing message in ${mailboxName} (${
+                          message.seq || message.uid
+                        }): ${error.message || "Unknown error"}`
+                      );
+                    } else {
+                      // Wait before retrying
+                      if (retryDelay > 0) {
+                        await new Promise((resolve) =>
+                          setTimeout(resolve, retryDelay)
+                        );
+                      }
+                    }
                   }
-                } else {
-                  // Handle zero size gracefully
-                  console.warn(
-                    `Message size is zero for message ${idForError}, skipping.`
-                  );
-                  mailboxStats.skippedMessages++;
-                  stats.skippedEmails++;
-
-                  const totalProcessed =
-                    stats.syncedEmails + stats.skippedEmails;
-                  await updateProgress(sessionId, {
-                    processedMessages: totalProcessed,
-                    percentage: Math.min(
-                      95,
-                      5 + Math.floor(((i + 1) / maxMailboxes) * 90)
-                    ),
-                    logs: [
-                      {
-                        message: `Skipped message with zero size. Progress: ${totalProcessed}/${stats.totalEmails} in ${mailboxName}`,
-                        timestamp: new Date().toISOString(), // Fresh timestamp
-                      },
-                    ],
-                  });
                 }
-              } catch (error: any) {
-                console.error(`Error syncing message ${idForError}:`, error);
-                mailboxStats.skippedMessages++;
-                stats.skippedEmails++;
-                stats.errors.push(
-                  `Error syncing message in ${mailboxName} (${idForError}): ${
-                    error.message || "Unknown error"
-                  }`
-                );
               }
             }
           }
